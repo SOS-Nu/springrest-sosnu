@@ -36,4 +36,16 @@ public class UserService {
     public List<User> fetchAllUser() {
         return this.userRepository.findAll();
     }
+
+    public User handleUpdateUser(User reqUser) {
+        User currentUser = this.fetchUserById(reqUser.getId());
+        if (currentUser != null) {
+            currentUser.setEmail(reqUser.getEmail());
+            currentUser.setName(reqUser.getName());
+            currentUser.setPassword(reqUser.getPassword());
+            // update
+            currentUser = this.userRepository.save(currentUser);
+        }
+        return currentUser;
+    }
 }
