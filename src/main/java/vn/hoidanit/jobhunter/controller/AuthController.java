@@ -6,6 +6,7 @@ import org.springframework.security.config.annotation.authentication.builders.Au
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.dto.LoginDTO;
 
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,14 +15,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 @RestController
 public class AuthController {
 
-    public final AuthenticationManagerBuilder authenticationManagerBuilder;
+    private final AuthenticationManagerBuilder authenticationManagerBuilder;
 
     public AuthController(AuthenticationManagerBuilder authenticationManagerBuilder) {
         this.authenticationManagerBuilder = authenticationManagerBuilder;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginDTO> Login(@RequestBody LoginDTO loginDto) {
+    public ResponseEntity<LoginDTO> Login(@Valid @RequestBody LoginDTO loginDto) {
 
         // Nạp input gồm username/password vào Security
         UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
