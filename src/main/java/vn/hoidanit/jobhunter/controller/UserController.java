@@ -42,7 +42,7 @@ public class UserController {
     public ResponseEntity<String> deleteUser(@PathVariable("id") long id) throws IdInvalidException {
 
         if (id >= 1500) {
-            throw new IdInvalidException("id phai nho hon 150005");
+            throw new IdInvalidException("id phai nho hon 15005");
 
         }
         this.userService.handleDeleteUser(id);
