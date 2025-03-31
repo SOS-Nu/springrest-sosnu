@@ -37,7 +37,7 @@ public class SecurityUtil {
     @Value("${hoidanit.jwt.access-token-validity-in-seconds}")
     private long refreshTokenExpirations;
 
-    public String createAccessToken(Authentication authentication) {
+    public String createAccessToken(Authentication authentication, ResLoginDTO.UserLogin dto) {
         Instant now = Instant.now();
         Instant validity = now.plus(this.accessTokenExpirations, ChronoUnit.SECONDS);
 
@@ -46,7 +46,7 @@ public class SecurityUtil {
             .issuedAt(now)
             .expiresAt(validity)
             .subject(authentication.getName())
-            .claim("sosnu", authentication)
+            .claim("user", dto)
             .build();
 
         JwsHeader jwsHeader = JwsHeader.with(JWT_ALGORITHM).build();
