@@ -1,16 +1,14 @@
 package vn.hoidanit.jobhunter.domain;
 
 import java.time.Instant;
-
-import jakarta.persistence.Column;
+import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -18,48 +16,36 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
-import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 
 @Entity
-@Table(name = "users")
+@Table(name = "permissions")
 @Getter
 @Setter
-public class User {
-
+public class Permission {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
 
+    @NotBlank(message = "name không được để trống")
     private String name;
 
-    @NotBlank(message = "email không được để trống")
-    private String email;
+    @NotBlank(message = "apiPath không được để trống")
+    private String apiPath;
 
-    @NotBlank(message = "password không được để trống")
-    private String password;
+    @NotBlank(message = "method không được để trống")
+    private String method;
 
-    private int age;
-
-    @Enumerated(EnumType.STRING)
-    private GenderEnum gender;
-
-    private String address;
-
-    @Column(columnDefinition = "MEDIUMTEXT")
-    private String refreshToken;
+    @NotBlank(message = "module không được để trống")
+    private String module;
 
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;
     private String updatedBy;
 
-    @ManyToOne
-    @JoinColumn(name = "role_id")
-    private Role role;
-
-    @ManyToOne
-    @JoinColumn(name = "company_id")
-    private Company company;
+    @ManyToMany(fetch = FetchType.LAZY, mappedBy = "permissions")
+    @JsonIgnore
+    private List<Role> roles;
 
     @PrePersist
     public void handleBeforeCreate() {
@@ -78,5 +64,4 @@ public class User {
 
         this.updatedAt = Instant.now();
     }
-
 }
