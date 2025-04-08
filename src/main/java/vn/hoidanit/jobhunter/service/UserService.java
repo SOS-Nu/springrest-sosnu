@@ -107,7 +107,7 @@ public class UserService {
         return currentUser;
     }
 
-    public User handleGetUserByUserName(String username) {
+    public User handleGetUserByUsername(String username) {
         return this.userRepository.findByEmail(username);
     }
 
@@ -180,7 +180,7 @@ public class UserService {
     }
 
     public void updateUserToken(String token, String email) {
-        User currentUser = this.handleGetUserByUserName(email);
+        User currentUser = this.handleGetUserByUsername(email);
         if (currentUser != null) {
             currentUser.setRefreshToken(token);
             this.userRepository.save(currentUser);
