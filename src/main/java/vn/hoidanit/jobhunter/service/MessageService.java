@@ -37,4 +37,8 @@ public class MessageService {
         return messageRepository.findBySenderEmailAndReceiverEmailOrReceiverEmailAndSenderEmail(
                 senderEmail, receiverEmail, receiverEmail, senderEmail, pageable).getContent();
     }
+
+    public List<String> getConversationEmails(String userEmail) {
+        return messageRepository.findDistinctConversationEmails(userEmail);
+    }
 }
