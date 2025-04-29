@@ -16,6 +16,7 @@ import vn.hoidanit.jobhunter.domain.Company;
 import vn.hoidanit.jobhunter.domain.Role;
 import vn.hoidanit.jobhunter.domain.User;
 import vn.hoidanit.jobhunter.domain.UserBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
@@ -207,43 +208,43 @@ public class UserService {
     }
 
     @Transactional
-    public List<ResCreateUserDTO> handleBulkCreateUsers(List<UserBulkCreateDTO> userDTOs) throws IdInvalidException {
-        List<ResCreateUserDTO> result = new ArrayList<>();
-        List<String> existingEmails = new ArrayList<>();
+    public ResBulkCreateUserDTO handleBulkCreateUsers(List<UserBulkCreateDTO> userDTOs) {
+        int total = userDTOs.size();
+        int success = 0;
+        List<String> failedEmails = new ArrayList<>();
 
-        // Check for duplicate emails in the request
         for (UserBulkCreateDTO dto : userDTOs) {
-            if (this.isEmailExist(dto.getEmail())) {
-                existingEmails.add(dto.getEmail());
+            try {
+                // Kiểm tra email trùng
+                if (this.isEmailExist(dto.getEmail())) {
+                    failedEmails.add(dto.getEmail() + " (Email tồn tại)");
+                    continue;
+                }
+
+                User user = new User();
+                user.setName(dto.getName());
+                user.setEmail(dto.getEmail());
+                user.setPassword(this.passwordEncoder.encode(dto.getPassword()));
+                user.setGender(dto.getGender());
+                user.setAddress(dto.getAddress());
+                user.setAge(dto.getAge());
+
+                // Kiểm tra và gán role
+                Optional<Role> roleOptional = this.roleRepository.findById(dto.getRole().getId());
+                if (roleOptional.isEmpty()) {
+                    failedEmails.add(dto.getEmail() + " (Role ID không tồn tại)");
+                    continue;
+                }
+                user.setRole(roleOptional.get());
+
+                // Lưu user
+                this.userRepository.save(user);
+                success++;
+            } catch (Exception e) {
+                failedEmails.add(dto.getEmail() + " (Lỗi hệ thống: " + e.getMessage() + ")");
             }
         }
 
-        if (!existingEmails.isEmpty()) {
-            throw new IdInvalidException("Emails đã tồn tại: " + String.join(", ", existingEmails));
-        }
-
-        for (UserBulkCreateDTO dto : userDTOs) {
-            User user = new User();
-            user.setName(dto.getName());
-            user.setEmail(dto.getEmail());
-            user.setPassword(this.passwordEncoder.encode(dto.getPassword()));
-            user.setGender(dto.getGender());
-            user.setAddress(dto.getAddress());
-            user.setAge(dto.getAge());
-
-            // Fetch and set role
-            Optional<Role> roleOptional = this.roleRepository.findById(dto.getRole().getId());
-            if (roleOptional.isEmpty()) {
-                throw new IdInvalidException("Role với id = " + dto.getRole().getId() + " không tồn tại");
-            }
-            user.setRole(roleOptional.get());
-
-            // Save user
-            User savedUser = this.userRepository.save(user);
-            result.add(convertToResCreateUserDTO(savedUser));
-        }
-
-        return result;
+        return new ResBulkCreateUserDTO(total, success, total - success, failedEmails);
     }
-
 }
