@@ -12,24 +12,29 @@ import org.springframework.stereotype.Service;
 import vn.hoidanit.jobhunter.domain.Company;
 import vn.hoidanit.jobhunter.domain.Role;
 import vn.hoidanit.jobhunter.domain.User;
+import vn.hoidanit.jobhunter.domain.UserImportDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
+import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
-    private CompanyService companyService;
-    private RoleService roleService;
+    private final CompanyService companyService;
+    private final RoleService roleService;
+    private final RoleRepository roleRepository;
 
     public UserService(UserRepository userRepository, CompanyService companyService,
-            RoleService roleService) {
+            RoleService roleService, RoleRepository roleRepository) {
         this.userRepository = userRepository;
         this.companyService = companyService;
         this.roleService = roleService;
+        this.roleRepository = roleRepository;
     }
 
     public User handleCreateUser(User user) {
@@ -193,6 +198,36 @@ public class UserService {
 
     public User getUserByRefreshTokenAndEmail(String token, String email) {
         return this.userRepository.findByRefreshTokenAndEmail(token, email);
+    }
+
+    public void bulkCreate(List<UserImportDTO> userImportDTOs) {
+        List<User> users = userImportDTOs.stream().map(dto -> {
+            User user = new User();
+            user.setName(dto.getName());
+            user.setEmail(dto.getEmail());
+            user.setPassword(dto.getPassword());
+            user.setAddress(dto.getAddress());
+            user.setAge(dto.getAge() != null ? dto.getAge() : 0);
+
+            // Xử lý GenderEnum
+            if (dto.getGender() != null) {
+                try {
+                    user.setGender(GenderEnum.valueOf(dto.getGender().toUpperCase()));
+                } catch (IllegalArgumentException ex) {
+                    user.setGender(null);
+                }
+            }
+
+            // Gán Role
+            Role role = roleRepository.findById(dto.getRoleId())
+                    .orElseThrow(() -> new RuntimeException("Role not found with ID: " + dto.getRoleId()));
+            user.setRole(role);
+
+            // Các field khác để mặc định: createdAt, createdBy sẽ tự set
+            return user;
+        }).toList();
+
+        userRepository.saveAll(users);
     }
 
 }
