@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -7,29 +8,39 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import vn.hoidanit.jobhunter.domain.Company;
 import vn.hoidanit.jobhunter.domain.Role;
 import vn.hoidanit.jobhunter.domain.User;
+import vn.hoidanit.jobhunter.domain.UserBulkCreateDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
 public class UserService {
 
+    private final PasswordEncoder passwordEncoder;
+
     private final UserRepository userRepository;
     private CompanyService companyService;
     private RoleService roleService;
+    private final RoleRepository roleRepository;
 
     public UserService(UserRepository userRepository, CompanyService companyService,
-            RoleService roleService) {
+            RoleService roleService, PasswordEncoder passwordEncoder, RoleRepository roleRepository) {
         this.userRepository = userRepository;
         this.companyService = companyService;
         this.roleService = roleService;
+        this.passwordEncoder = passwordEncoder;
+        this.roleRepository = roleRepository;
     }
 
     public User handleCreateUser(User user) {
@@ -193,6 +204,46 @@ public class UserService {
 
     public User getUserByRefreshTokenAndEmail(String token, String email) {
         return this.userRepository.findByRefreshTokenAndEmail(token, email);
+    }
+
+    @Transactional
+    public List<ResCreateUserDTO> handleBulkCreateUsers(List<UserBulkCreateDTO> userDTOs) throws IdInvalidException {
+        List<ResCreateUserDTO> result = new ArrayList<>();
+        List<String> existingEmails = new ArrayList<>();
+
+        // Check for duplicate emails in the request
+        for (UserBulkCreateDTO dto : userDTOs) {
+            if (this.isEmailExist(dto.getEmail())) {
+                existingEmails.add(dto.getEmail());
+            }
+        }
+
+        if (!existingEmails.isEmpty()) {
+            throw new IdInvalidException("Emails đã tồn tại: " + String.join(", ", existingEmails));
+        }
+
+        for (UserBulkCreateDTO dto : userDTOs) {
+            User user = new User();
+            user.setName(dto.getName());
+            user.setEmail(dto.getEmail());
+            user.setPassword(this.passwordEncoder.encode(dto.getPassword()));
+            user.setGender(dto.getGender());
+            user.setAddress(dto.getAddress());
+            user.setAge(dto.getAge());
+
+            // Fetch and set role
+            Optional<Role> roleOptional = this.roleRepository.findById(dto.getRole().getId());
+            if (roleOptional.isEmpty()) {
+                throw new IdInvalidException("Role với id = " + dto.getRole().getId() + " không tồn tại");
+            }
+            user.setRole(roleOptional.get());
+
+            // Save user
+            User savedUser = this.userRepository.save(user);
+            result.add(convertToResCreateUserDTO(savedUser));
+        }
+
+        return result;
     }
 
 }
