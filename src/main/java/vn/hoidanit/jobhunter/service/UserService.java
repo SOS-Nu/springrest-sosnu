@@ -200,34 +200,4 @@ public class UserService {
         return this.userRepository.findByRefreshTokenAndEmail(token, email);
     }
 
-    public void bulkCreate(List<UserImportDTO> userImportDTOs) {
-        List<User> users = userImportDTOs.stream().map(dto -> {
-            User user = new User();
-            user.setName(dto.getName());
-            user.setEmail(dto.getEmail());
-            user.setPassword(dto.getPassword());
-            user.setAddress(dto.getAddress());
-            user.setAge(dto.getAge() != null ? dto.getAge() : 0);
-
-            // Xử lý GenderEnum
-            if (dto.getGender() != null) {
-                try {
-                    user.setGender(GenderEnum.valueOf(dto.getGender().toUpperCase()));
-                } catch (IllegalArgumentException ex) {
-                    user.setGender(null);
-                }
-            }
-
-            // Gán Role
-            Role role = roleRepository.findById(dto.getRoleId())
-                    .orElseThrow(() -> new RuntimeException("Role not found with ID: " + dto.getRoleId()));
-            user.setRole(role);
-
-            // Các field khác để mặc định: createdAt, createdBy sẽ tự set
-            return user;
-        }).toList();
-
-        userRepository.saveAll(users);
-    }
-
 }
