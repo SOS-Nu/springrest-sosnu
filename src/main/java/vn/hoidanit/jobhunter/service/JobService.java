@@ -9,13 +9,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import vn.hoidanit.jobhunter.domain.Company;
 import vn.hoidanit.jobhunter.domain.Job;
-import vn.hoidanit.jobhunter.domain.JobBulkCreateDTO;
 import vn.hoidanit.jobhunter.domain.Skill;
-import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
@@ -79,77 +75,6 @@ public class JobService {
         }
 
         return dto;
-    }
-
-    @Transactional
-    public ResBulkCreateJobDTO handleBulkCreateJobs(List<JobBulkCreateDTO> jobDTOs) {
-        int total = jobDTOs.size();
-        int success = 0;
-        List<String> failedJobs = new ArrayList<>();
-
-        for (JobBulkCreateDTO dto : jobDTOs) {
-            try {
-                // Kiểm tra tên job trùng lặp
-                if (this.isJobExist(dto.getName())) {
-                    failedJobs.add(dto.getName() + " (Job tồn tại)");
-                    continue;
-                }
-
-                // Tạo entity Job từ DTO
-                Job job = new Job();
-                job.setName(dto.getName());
-                job.setLocation(dto.getLocation());
-
-                // Chuyển salary từ chuỗi sang double
-                try {
-                    job.setSalary(Double.parseDouble(dto.getSalary()));
-                } catch (NumberFormatException e) {
-                    failedJobs.add(dto.getName() + " (Sai định dạng salary)");
-                    continue;
-                }
-
-                job.setQuantity(dto.getQuantity());
-
-                // Ánh xạ level sang LevelEnum
-                try {
-                    job.setLevel(LevelEnum.valueOf(dto.getLevel()));
-                } catch (IllegalArgumentException e) {
-                    failedJobs.add(dto.getName() + " (Level không hợp lệ)");
-                    continue;
-                }
-
-                job.setDescription(dto.getDescription());
-                job.setStartDate(dto.getStartDate());
-                job.setEndDate(dto.getEndDate());
-                job.setActive(dto.isActive());
-
-                // Xử lý skills
-                if (dto.getSkills() != null && !dto.getSkills().isEmpty()) {
-                    List<Long> skillIds = dto.getSkills().stream()
-                            .map(JobBulkCreateDTO.SkillDTO::getId)
-                            .collect(Collectors.toList());
-                    List<Skill> dbSkills = this.skillRepository.findByIdIn(skillIds);
-                    if (dbSkills.size() != skillIds.size()) {
-                        failedJobs.add(dto.getName() + " (Một hoặc nhiều skill ID không tồn tại)");
-                        continue;
-                    }
-                    job.setSkills(dbSkills);
-                } else {
-                    job.setSkills(new ArrayList<>());
-                }
-
-                // Giả định company là tùy chọn (set null)
-                job.setCompany(null); // Điều chỉnh nếu cần lấy company từ ngữ cảnh
-
-                // Lưu job bằng phương thức create hiện có
-                this.create(job);
-                success++;
-            } catch (Exception e) {
-                failedJobs.add(dto.getName() + " (Lỗi hệ thống: " + e.getMessage() + ")");
-            }
-        }
-
-        return new ResBulkCreateJobDTO(total, success, total - success, failedJobs);
     }
 
     public ResUpdateJobDTO update(Job j, Job jobInDB) {

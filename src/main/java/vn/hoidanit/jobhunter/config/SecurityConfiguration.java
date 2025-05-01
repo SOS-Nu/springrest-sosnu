@@ -60,11 +60,8 @@ public class SecurityConfiguration {
                 "/swagger-ui/**",
                 "/swagger-ui.html",
                 "/ws/**",
-<<<<<<< HEAD
-=======
                 "/api/v1/messages/**",
                 "/api/v1/conversations/**",
->>>>>>> fixbug1
         };
         http
                 .csrf(c -> c.disable())

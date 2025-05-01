@@ -15,23 +15,16 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.hoidanit.jobhunter.domain.Company;
 import vn.hoidanit.jobhunter.domain.Role;
 import vn.hoidanit.jobhunter.domain.User;
-<<<<<<< HEAD
-import vn.hoidanit.jobhunter.domain.UserImportDTO;
-=======
 import vn.hoidanit.jobhunter.domain.UserBulkCreateDTO;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
->>>>>>> fixbug1
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
-<<<<<<< HEAD
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
-=======
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
->>>>>>> fixbug1
 
 @Service
 public class UserService {
@@ -39,17 +32,6 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     private final UserRepository userRepository;
-<<<<<<< HEAD
-    private final CompanyService companyService;
-    private final RoleService roleService;
-    private final RoleRepository roleRepository;
-
-    public UserService(UserRepository userRepository, CompanyService companyService,
-            RoleService roleService, RoleRepository roleRepository) {
-        this.userRepository = userRepository;
-        this.companyService = companyService;
-        this.roleService = roleService;
-=======
     private CompanyService companyService;
     private RoleService roleService;
     private final RoleRepository roleRepository;
@@ -60,7 +42,6 @@ public class UserService {
         this.companyService = companyService;
         this.roleService = roleService;
         this.passwordEncoder = passwordEncoder;
->>>>>>> fixbug1
         this.roleRepository = roleRepository;
     }
 
