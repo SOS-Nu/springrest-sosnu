@@ -6,6 +6,8 @@ import com.turkraft.springfilter.boot.Filter;
 
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.User;
+import vn.hoidanit.jobhunter.domain.UserBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
@@ -13,6 +15,9 @@ import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.service.UserService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+
+import java.util.List;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -101,4 +106,12 @@ public class UserController {
         }
         return ResponseEntity.ok(this.userService.convertToResUpdateUserDTO(nuUser));
     }
+
+    @PostMapping("/users/bulk-create")
+    @ApiMessage("Create multiple users")
+    public ResponseEntity<ResBulkCreateUserDTO> bulkCreateUsers(@Valid @RequestBody List<UserBulkCreateDTO> userDTOs) {
+        ResBulkCreateUserDTO result = this.userService.handleBulkCreateUsers(userDTOs);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
+
 }

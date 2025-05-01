@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -7,24 +8,38 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import vn.hoidanit.jobhunter.domain.Company;
 import vn.hoidanit.jobhunter.domain.Role;
 import vn.hoidanit.jobhunter.domain.User;
+<<<<<<< HEAD
 import vn.hoidanit.jobhunter.domain.UserImportDTO;
+=======
+import vn.hoidanit.jobhunter.domain.UserBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
+>>>>>>> fixbug1
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
+<<<<<<< HEAD
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
+=======
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+>>>>>>> fixbug1
 
 @Service
 public class UserService {
 
+    private final PasswordEncoder passwordEncoder;
+
     private final UserRepository userRepository;
+<<<<<<< HEAD
     private final CompanyService companyService;
     private final RoleService roleService;
     private final RoleRepository roleRepository;
@@ -34,6 +49,18 @@ public class UserService {
         this.userRepository = userRepository;
         this.companyService = companyService;
         this.roleService = roleService;
+=======
+    private CompanyService companyService;
+    private RoleService roleService;
+    private final RoleRepository roleRepository;
+
+    public UserService(UserRepository userRepository, CompanyService companyService,
+            RoleService roleService, PasswordEncoder passwordEncoder, RoleRepository roleRepository) {
+        this.userRepository = userRepository;
+        this.companyService = companyService;
+        this.roleService = roleService;
+        this.passwordEncoder = passwordEncoder;
+>>>>>>> fixbug1
         this.roleRepository = roleRepository;
     }
 
@@ -200,4 +227,44 @@ public class UserService {
         return this.userRepository.findByRefreshTokenAndEmail(token, email);
     }
 
+    @Transactional
+    public ResBulkCreateUserDTO handleBulkCreateUsers(List<UserBulkCreateDTO> userDTOs) {
+        int total = userDTOs.size();
+        int success = 0;
+        List<String> failedEmails = new ArrayList<>();
+
+        for (UserBulkCreateDTO dto : userDTOs) {
+            try {
+                // Kiểm tra email trùng
+                if (this.isEmailExist(dto.getEmail())) {
+                    failedEmails.add(dto.getEmail() + " (Email tồn tại)");
+                    continue;
+                }
+
+                User user = new User();
+                user.setName(dto.getName());
+                user.setEmail(dto.getEmail());
+                user.setPassword(this.passwordEncoder.encode(dto.getPassword()));
+                user.setGender(dto.getGender());
+                user.setAddress(dto.getAddress());
+                user.setAge(dto.getAge());
+
+                // Kiểm tra và gán role
+                Optional<Role> roleOptional = this.roleRepository.findById(dto.getRole().getId());
+                if (roleOptional.isEmpty()) {
+                    failedEmails.add(dto.getEmail() + " (Role ID không tồn tại)");
+                    continue;
+                }
+                user.setRole(roleOptional.get());
+
+                // Lưu user
+                this.userRepository.save(user);
+                success++;
+            } catch (Exception e) {
+                failedEmails.add(dto.getEmail() + " (Lỗi hệ thống: " + e.getMessage() + ")");
+            }
+        }
+
+        return new ResBulkCreateUserDTO(total, success, total - success, failedEmails);
+    }
 }

@@ -48,6 +48,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             arr.add(new Permission("Get companies with pagination", "/api/v1/companies", "GET", "COMPANIES"));
 
             arr.add(new Permission("Create a job", "/api/v1/jobs", "POST", "JOBS"));
+            arr.add(new Permission("Create bulk jobs", "/api/v1/jobs/bulk-create", "POST", "JOBS"));
             arr.add(new Permission("Update a job", "/api/v1/jobs", "PUT", "JOBS"));
             arr.add(new Permission("Delete a job", "/api/v1/jobs/{id}", "DELETE", "JOBS"));
             arr.add(new Permission("Get a job by id", "/api/v1/jobs/{id}", "GET", "JOBS"));
@@ -72,6 +73,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             arr.add(new Permission("Get roles with pagination", "/api/v1/roles", "GET", "ROLES"));
 
             arr.add(new Permission("Create a user", "/api/v1/users", "POST", "USERS"));
+            arr.add(new Permission("Create bulk user", "/api/v1/users/bulk-create", "POST", "USERS"));
             arr.add(new Permission("Update a user", "/api/v1/users", "PUT", "USERS"));
             arr.add(new Permission("Delete a user", "/api/v1/users/{id}", "DELETE", "USERS"));
             arr.add(new Permission("Get a user by id", "/api/v1/users/{id}", "GET", "USERS"));
