@@ -114,10 +114,4 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
-    @GetMapping("/users/bulk-create")
-    @ApiMessage("Invalid endpoint for GET request")
-    public ResponseEntity<String> handleInvalidGetRequest() {
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-                .body("This endpoint only supports POST requests for bulk user creation.");
-    }
 }
