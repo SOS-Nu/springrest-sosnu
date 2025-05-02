@@ -1,5 +1,7 @@
 package vn.hoidanit.jobhunter.controller;
 
+import java.util.List;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.turkraft.springfilter.boot.Filter;
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.Skill;
+import vn.hoidanit.jobhunter.domain.SkillBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.response.ResBulkCreateSkillDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.service.SkillService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
@@ -38,6 +42,14 @@ public class SkillController {
             throw new IdInvalidException("Skill name = " + s.getName() + " đã tồn tại");
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(this.skillService.createSkill(s));
+    }
+
+    @PostMapping("/skills/bulk-create")
+    @ApiMessage("Create list bulk skill")
+    public ResponseEntity<ResBulkCreateSkillDTO> bulkCreateSkills(
+            @Valid @RequestBody List<SkillBulkCreateDTO> skillDTOs) {
+        ResBulkCreateSkillDTO result = this.skillService.handleBulkCreateSkills(skillDTOs);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     @PutMapping("/skills")

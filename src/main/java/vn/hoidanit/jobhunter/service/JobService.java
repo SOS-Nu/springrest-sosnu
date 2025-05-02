@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -9,9 +10,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import vn.hoidanit.jobhunter.domain.Company;
 import vn.hoidanit.jobhunter.domain.Job;
+import vn.hoidanit.jobhunter.domain.JobBulkCreateDTO;
 import vn.hoidanit.jobhunter.domain.Skill;
+import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
@@ -155,5 +160,63 @@ public class JobService {
         rs.setResult(pageUser.getContent());
 
         return rs;
+    }
+
+    @Transactional
+    public ResBulkCreateJobDTO handleBulkCreateJobs(List<JobBulkCreateDTO> jobDTOs) {
+        int total = jobDTOs.size();
+        int success = 0;
+        List<String> failedJobs = new ArrayList<>();
+
+        for (JobBulkCreateDTO dto : jobDTOs) {
+            try {
+                // Kiểm tra công việc trùng (dựa trên name và company)
+                if (this.isJobExist(dto.getName(), dto.getCompany().getId())) {
+                    failedJobs.add(dto.getName() + " (Công việc đã tồn tại cho công ty này)");
+                    continue;
+                }
+
+                Job job = new Job();
+                job.setName(dto.getName());
+                job.setLocation(dto.getLocation());
+                job.setSalary(Long.parseLong(dto.getSalary()));
+                job.setQuantity(dto.getQuantity());
+                job.setLevel(dto.getLevel());
+                job.setDescription(dto.getDescription());
+                job.setStartDate(Instant.parse(dto.getStartDate()));
+                job.setEndDate(Instant.parse(dto.getEndDate()));
+                job.setActive(dto.isActive());
+
+                // Kiểm tra và gán company
+                Optional<Company> companyOptional = this.companyRepository.findById(dto.getCompany().getId());
+                if (companyOptional.isEmpty()) {
+                    failedJobs.add(dto.getName() + " (Company ID không tồn tại)");
+                    continue;
+                }
+                job.setCompany(companyOptional.get());
+
+                // Kiểm tra và gán skills
+                List<Long> skillIds = dto.getSkills().stream().map(JobBulkCreateDTO.SkillDTO::getId)
+                        .collect(Collectors.toList());
+                List<Skill> skills = this.skillRepository.findAllById(skillIds);
+                if (skills.size() != skillIds.size()) {
+                    failedJobs.add(dto.getName() + " (Một hoặc nhiều Skill ID không tồn tại)");
+                    continue;
+                }
+                job.setSkills(skills);
+
+                // Lưu job
+                this.jobRepository.save(job);
+                success++;
+            } catch (Exception e) {
+                failedJobs.add(dto.getName() + " (Lỗi hệ thống: " + e.getMessage() + ")");
+            }
+        }
+
+        return new ResBulkCreateJobDTO(total, success, total - success, failedJobs);
+    }
+
+    private boolean isJobExist(String name, Long companyId) {
+        return this.jobRepository.existsByNameAndCompanyId(name, companyId);
     }
 }

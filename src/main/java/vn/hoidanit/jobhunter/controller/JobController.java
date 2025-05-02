@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.controller;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.turkraft.springfilter.boot.Filter;
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.Job;
+import vn.hoidanit.jobhunter.domain.JobBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
@@ -38,6 +41,14 @@ public class JobController {
     public ResponseEntity<ResCreateJobDTO> create(@Valid @RequestBody Job job) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(this.jobService.create(job));
+    }
+
+    @PostMapping("/jobs/bulk-create")
+    @ApiMessage("Create bulk list job")
+
+    public ResponseEntity<ResBulkCreateJobDTO> bulkCreateJobs(@Valid @RequestBody List<JobBulkCreateDTO> jobDTOs) {
+        ResBulkCreateJobDTO result = this.jobService.handleBulkCreateJobs(jobDTOs);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     @PutMapping("/jobs")

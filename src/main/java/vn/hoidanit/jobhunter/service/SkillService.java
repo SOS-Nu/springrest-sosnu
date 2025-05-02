@@ -1,13 +1,18 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import vn.hoidanit.jobhunter.domain.Skill;
+import vn.hoidanit.jobhunter.domain.SkillBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.response.ResBulkCreateSkillDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.repository.SkillRepository;
 
@@ -32,6 +37,34 @@ public class SkillService {
 
     public Skill createSkill(Skill s) {
         return this.skillRepository.save(s);
+    }
+
+    @Transactional
+    public ResBulkCreateSkillDTO handleBulkCreateSkills(List<SkillBulkCreateDTO> skillDTOs) {
+        int total = skillDTOs.size();
+        int success = 0;
+        List<String> failedSkills = new ArrayList<>();
+
+        for (SkillBulkCreateDTO dto : skillDTOs) {
+            try {
+                // Kiểm tra skill trùng (dựa trên name)
+                if (this.skillRepository.existsByName(dto.getName())) {
+                    failedSkills.add(dto.getName() + " (Skill đã tồn tại)");
+                    continue;
+                }
+
+                Skill skill = new Skill();
+                skill.setName(dto.getName());
+
+                // Lưu skill
+                this.skillRepository.save(skill);
+                success++;
+            } catch (Exception e) {
+                failedSkills.add(dto.getName() + " (Lỗi hệ thống: " + e.getMessage() + ")");
+            }
+        }
+
+        return new ResBulkCreateSkillDTO(total, success, total - success, failedSkills);
     }
 
     public Skill updateSkill(Skill s) {
