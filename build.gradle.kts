@@ -36,7 +36,8 @@ dependencies {
 	implementation("org.apache.poi:poi:5.2.3")
 	implementation("org.apache.poi:poi-ooxml:5.2.3")
 	implementation("com.opencsv:opencsv:5.8")
-
+	implementation("com.google.auth:google-auth-library-oauth2-http:1.23.0")
+	implementation("com.google.api-client:google-api-client:2.7.0")
 }
 
 tasks.withType<Test> {

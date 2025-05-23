@@ -52,7 +52,7 @@ public class SecurityConfiguration {
             CustomAuthenticationEntryPoint customAuthenticationEntryPoint) throws Exception {
         String[] whiteList = {
                 "/",
-                "/api/v1/auth/login", "/api/v1/auth/refresh", "/storage/**",
+                "/api/v1/auth/login", "/api/v1/auth/google", "/api/v1/auth/refresh", "/storage/**",
                 "/api/v1/auth/register",
                 "/api/v1/companies/**", "/api/v1/jobs/**",
                 "/api/v1/email/**",
@@ -62,6 +62,8 @@ public class SecurityConfiguration {
                 "/ws/**",
                 "/api/v1/messages/**",
                 "/api/v1/conversations/**",
+                "/auth/send-otp", "/auth/verify-otp-change-password"
+
         };
         http
                 .csrf(c -> c.disable())
