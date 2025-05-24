@@ -62,7 +62,8 @@ public class SecurityConfiguration {
                 "/ws/**",
                 "/api/v1/messages/**",
                 "/api/v1/conversations/**",
-                "/auth/send-otp", "/auth/verify-otp-change-password"
+                "/auth/send-otp", "/auth/verify-otp-change-password",
+                "/api/v1/payment/vnpay/**",
 
         };
         http

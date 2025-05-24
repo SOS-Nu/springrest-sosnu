@@ -1,6 +1,7 @@
 package vn.hoidanit.jobhunter.domain;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
@@ -54,6 +55,9 @@ public class User {
     private Instant updatedAt;
     private String createdBy;
     private String updatedBy;
+    private boolean isVip;
+    private LocalDateTime vipExpiryDate;
+    private int cvSubmissionCount;
 
     @ManyToOne
     @JoinColumn(name = "company_id")

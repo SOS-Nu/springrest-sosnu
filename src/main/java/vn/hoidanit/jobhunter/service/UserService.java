@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -248,4 +250,49 @@ public class UserService {
 
         return new ResBulkCreateUserDTO(total, success, total - success, failedEmails);
     }
+
+    public void activateVip(User user) {
+        user.setVip(true);
+        user.setVipExpiryDate(LocalDateTime.now().plusMonths(1));
+        user.setCvSubmissionCount(0);
+        userRepository.save(user);
+    }
+
+    public boolean canSubmitCv(String email) {
+        User user = handleGetUserByUsername(email);
+        if (user == null) {
+            return false;
+        }
+
+        if (user.isVip() && user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now())) {
+            user.setVip(false);
+            user.setCvSubmissionCount(0);
+            userRepository.save(user);
+        }
+
+        int maxSubmissions = user.isVip() ? 30 : 10;
+        return user.getCvSubmissionCount() < maxSubmissions;
+    }
+
+    public void incrementCvSubmission(String email) {
+        User user = handleGetUserByUsername(email);
+        if (user != null) {
+            user.setCvSubmissionCount(user.getCvSubmissionCount() + 1);
+            userRepository.save(user);
+        }
+    }
+
+    @Scheduled(cron = "0 0 0 1 * ?")
+    public void resetCvSubmissionCount() {
+        List<User> users = userRepository.findAll();
+        users.forEach(user -> {
+            user.setCvSubmissionCount(0);
+            if (user.isVip() && user.getVipExpiryDate() != null
+                    && user.getVipExpiryDate().isBefore(LocalDateTime.now())) {
+                user.setVip(false);
+            }
+            userRepository.save(user);
+        });
+    }
+
 }

@@ -27,6 +27,7 @@ import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.ResumeRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
 public class ResumeService {
@@ -43,14 +44,17 @@ public class ResumeService {
     private final ResumeRepository resumeRepository;
     private final UserRepository userRepository;
     private final JobRepository jobRepository;
+    private final UserService userService;
 
     public ResumeService(
             ResumeRepository resumeRepository,
             UserRepository userRepository,
-            JobRepository jobRepository) {
+            UserService userService, JobRepository jobRepository) {
         this.resumeRepository = resumeRepository;
         this.userRepository = userRepository;
         this.jobRepository = jobRepository;
+        this.userService = userService;
+
     }
 
     public Optional<Resume> fetchById(long id) {
@@ -75,8 +79,19 @@ public class ResumeService {
         return true;
     }
 
-    public ResCreateResumeDTO create(Resume resume) {
+    public ResCreateResumeDTO create(Resume resume) throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin().orElseThrow(
+                () -> new IdInvalidException("Bạn cần đăng nhập để rải CV"));
+        if (!userService.canSubmitCv(email)) {
+            throw new IdInvalidException("Bạn đã hết lượt rải CV trong tháng này. Hãy nâng cấp lên VIP để rải thêm!");
+        }
+
+        if (!checkResumeExistByUserAndJob(resume)) {
+            throw new IdInvalidException("User hoặc Job không tồn tại");
+        }
+
         resume = this.resumeRepository.save(resume);
+        userService.incrementCvSubmission(email);
 
         ResCreateResumeDTO res = new ResCreateResumeDTO();
         res.setId(resume.getId());
