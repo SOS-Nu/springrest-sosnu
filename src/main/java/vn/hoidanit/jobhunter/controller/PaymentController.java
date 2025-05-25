@@ -200,7 +200,9 @@ public class PaymentController {
                         ph.getOrderId(),
                         ph.getResponseCode(),
                         ph.getStatus(),
-                        ph.getCreatedAt()))
+                        ph.getCreatedAt(),
+                        ph.getUpdatedAt(),
+                        ph.getUpdatedBy()))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(history);
@@ -227,7 +229,9 @@ public class PaymentController {
                         ph.getOrderId(),
                         ph.getResponseCode(),
                         ph.getStatus(),
-                        ph.getCreatedAt()))
+                        ph.getCreatedAt(),
+                        ph.getUpdatedAt(),
+                        ph.getUpdatedBy()))
                 .collect(Collectors.toList());
 
         ResultPaginationDTO result = new ResultPaginationDTO();
@@ -261,7 +265,9 @@ public class PaymentController {
                 paymentHistory.getOrderId(),
                 paymentHistory.getResponseCode(),
                 paymentHistory.getStatus(),
-                paymentHistory.getCreatedAt());
+                paymentHistory.getCreatedAt(),
+                paymentHistory.getUpdatedAt(),
+                paymentHistory.getUpdatedBy());
 
         return ResponseEntity.ok(dto);
     }
@@ -295,7 +301,9 @@ public class PaymentController {
                 paymentHistory.getOrderId(),
                 paymentHistory.getResponseCode(),
                 paymentHistory.getStatus(),
-                paymentHistory.getCreatedAt());
+                paymentHistory.getCreatedAt(),
+                paymentHistory.getUpdatedAt(),
+                paymentHistory.getUpdatedBy());
 
         return ResponseEntity.ok(dto);
     }

@@ -10,15 +10,19 @@ public class PaymentHistoryDTO {
     private String responseCode;
     private PaymentStatus status;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private String updatedBy;
 
     public PaymentHistoryDTO(Long userId, Long amount, String orderId, String responseCode, PaymentStatus status,
-            LocalDateTime createdAt) {
+            LocalDateTime createdAt, LocalDateTime updatedAt, String updatedBy) {
         this.userId = userId;
         this.amount = amount;
         this.orderId = orderId;
         this.responseCode = responseCode;
         this.status = status;
         this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.updatedBy = updatedBy;
     }
 
     // Getters and setters
@@ -68,5 +72,21 @@ public class PaymentHistoryDTO {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
     }
 }
