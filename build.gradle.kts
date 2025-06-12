@@ -5,7 +5,7 @@ plugins {
 	id("io.freefair.lombok") version "8.6"
 }
 
-group = "vn.hoidanit"
+group = "vn.jobhunter"
 version = "0.0.1-SNAPSHOT"
 
 java {
