@@ -79,6 +79,7 @@ public class SecurityConfiguration {
                                 .requestMatchers(HttpMethod.GET, "/api/v1/skills/**").permitAll()
                                 .requestMatchers(HttpMethod.PUT, "/api/v1/jobs/by-user-company").authenticated()
                                 .requestMatchers(HttpMethod.DELETE, "/api/v1/jobs/by-user-company/{id}").authenticated()
+                                .requestMatchers(HttpMethod.POST, "/api/v1/companies/by-user").authenticated()
                                 .anyRequest().authenticated())
                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults())
                         .authenticationEntryPoint(customAuthenticationEntryPoint))

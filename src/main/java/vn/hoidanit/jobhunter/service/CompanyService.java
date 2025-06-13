@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -7,28 +8,94 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.turkraft.springfilter.boot.Filter;
 
 import vn.hoidanit.jobhunter.domain.entity.Company;
+import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.domain.request.ReqCreateCompanyDTO;
+import vn.hoidanit.jobhunter.domain.response.ResCreateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.repository.CompanyRepository;
+import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
+import vn.hoidanit.jobhunter.util.SecurityUtil;
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
 public class CompanyService {
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
 
-    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository) {
+    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository,RoleRepository roleRepository) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
     }
 
     public Company handleCreateCompany(Company c) {
         return this.companyRepository.save(c);
+    }
+
+    @Transactional
+    public ResCreateCompanyDTO createCompanyByUser(ReqCreateCompanyDTO reqCompany) throws IdInvalidException {
+        // Lấy thông tin người dùng hiện tại
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
+
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        // Kiểm tra tài khoản VIP
+        if (!user.isVip() || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
+            user.setVip(false);
+            userRepository.save(user);
+            throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công ty");
+        }
+
+        // Kiểm tra người dùng đã có công ty
+        if (user.getCompany() != null) {
+            throw new IdInvalidException("Bạn đã tạo một công ty. Mỗi người dùng chỉ được tạo một công ty");
+        }
+
+        // Tạo công ty mới
+        Company company = new Company();
+        company.setName(reqCompany.getName());
+        company.setDescription(reqCompany.getDescription());
+        company.setAddress(reqCompany.getAddress());
+        company.setLogo(reqCompany.getLogo());
+
+        // Lưu công ty
+        Company savedCompany = companyRepository.save(company);
+
+        // Cập nhật company_id cho người dùng
+        user.setCompany(savedCompany);
+
+        // Gán role EMPLOYER cho người dùng
+        Role employerRole = roleRepository.findByName("EMPLOYER");
+        if (employerRole == null) {
+            throw new IdInvalidException("Role EMPLOYER không tồn tại");
+        }
+        user.setRole(employerRole);
+
+        userRepository.save(user);
+
+        // Tạo response
+        ResCreateCompanyDTO response = new ResCreateCompanyDTO();
+        response.setId(savedCompany.getId());
+        response.setName(savedCompany.getName());
+        response.setDescription(savedCompany.getDescription());
+        response.setAddress(savedCompany.getAddress());
+        response.setLogo(savedCompany.getLogo());
+        response.setCreatedAt(savedCompany.getCreatedAt());
+
+        return response;
     }
 
     public ResultPaginationDTO handleGetCompany(@Filter Specification<Company> spec, Pageable pageable) {

@@ -22,9 +22,12 @@ import com.turkraft.springfilter.boot.Filter;
 
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.entity.Company;
+import vn.hoidanit.jobhunter.domain.request.ReqCreateCompanyDTO;
+import vn.hoidanit.jobhunter.domain.response.ResCreateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.service.CompanyService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -65,5 +68,11 @@ public class CompanyController {
     public ResponseEntity<Company> fetchCompanyById(@PathVariable("id") long id) {
         Optional<Company> cOptional = this.companyService.findById(id);
         return ResponseEntity.ok().body(cOptional.get());
+    }
+
+        @PostMapping("/companies/by-user")
+    @ApiMessage("Create a company for the current user")
+    public ResponseEntity<ResCreateCompanyDTO> createCompanyByUser(@Valid @RequestBody ReqCreateCompanyDTO reqCompany) throws IdInvalidException {
+        return ResponseEntity.status(HttpStatus.CREATED).body(this.companyService.createCompanyByUser(reqCompany));
     }
 }

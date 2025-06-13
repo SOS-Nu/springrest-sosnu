@@ -47,6 +47,8 @@ public class DatabaseInitializer implements CommandLineRunner {
             arr.add(new Permission("Delete a company", "/api/v1/companies/{id}", "DELETE", "COMPANIES"));
             arr.add(new Permission("Get a company by id", "/api/v1/companies/{id}", "GET", "COMPANIES"));
             arr.add(new Permission("Get companies with pagination", "/api/v1/companies", "GET", "COMPANIES"));
+            // Thêm quyền mới
+            arr.add(new Permission("Create company by user", "/api/v1/companies/by-user", "POST", "COMPANIES"));
 
             arr.add(new Permission("Create a job", "/api/v1/jobs", "POST", "JOBS"));
             arr.add(new Permission("Create bulk jobs", "/api/v1/jobs/bulk-create", "POST", "JOBS"));
@@ -107,6 +109,21 @@ public class DatabaseInitializer implements CommandLineRunner {
             adminRole.setPermissions(allPermissions);
 
             this.roleRepository.save(adminRole);
+
+            // Role EMPLOYER
+            Role employerRole = new Role();
+            employerRole.setName("EMPLOYER");
+            employerRole.setDescription("Nhà tuyển dụng quản lý công ty của mình");
+            employerRole.setActive(true);
+            List<Permission> employerPermissions = new ArrayList<>();
+            employerPermissions.add(permissionRepository.findByName("Create company by user"));
+            employerPermissions.add(permissionRepository.findByName("Create a job"));
+            employerPermissions.add(permissionRepository.findByName("Update a job"));
+            employerPermissions.add(permissionRepository.findByName("Delete a job"));
+            employerPermissions.add(permissionRepository.findByName("Get a job by id"));
+            employerPermissions.add(permissionRepository.findByName("Get jobs with pagination"));
+            employerRole.setPermissions(employerPermissions);
+            this.roleRepository.save(employerRole);
         }
 
         if (countUsers == 0) {
