@@ -16,6 +16,9 @@ import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.domain.entity.JobBulkCreateDTO;
 import vn.hoidanit.jobhunter.domain.entity.Skill;
+import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.domain.request.ReqCreateJobDTO;
+import vn.hoidanit.jobhunter.domain.request.ReqUpdateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
@@ -23,7 +26,10 @@ import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
 import vn.hoidanit.jobhunter.repository.CompanyRepository;
 import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.SkillRepository;
+import vn.hoidanit.jobhunter.repository.UserRepository;
+import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.constant.LevelEnum;
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
 public class JobService {
@@ -31,12 +37,15 @@ public class JobService {
     private final JobRepository jobRepository;
     private final SkillRepository skillRepository;
     private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
 
     public JobService(JobRepository jobRepository,
-            SkillRepository skillRepository, CompanyRepository companyRepository) {
+            SkillRepository skillRepository, CompanyRepository companyRepository,
+            UserRepository userRepository) {
         this.jobRepository = jobRepository;
         this.skillRepository = skillRepository;
         this.companyRepository = companyRepository;
+        this.userRepository = userRepository;
     }
 
     public Optional<Job> fetchJobById(long id) {
@@ -82,8 +91,72 @@ public class JobService {
         return dto;
     }
 
-    public ResUpdateJobDTO update(Job j, Job jobInDB) {
+    public ResCreateJobDTO createForUserCompany(ReqCreateJobDTO jobDTO) throws IdInvalidException {
+        // Lấy thông tin người dùng hiện tại
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
 
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        // Kiểm tra công ty của người dùng
+        Company company = user.getCompany();
+        if (company == null) {
+            throw new IdInvalidException("Người dùng không thuộc công ty nào");
+        }
+
+        // Tạo job mới
+        Job job = new Job();
+        job.setName(jobDTO.getName());
+        job.setLocation(jobDTO.getLocation());
+        job.setSalary(jobDTO.getSalary());
+        job.setQuantity(jobDTO.getQuantity());
+        job.setLevel(jobDTO.getLevel());
+        job.setDescription(jobDTO.getDescription());
+        job.setStartDate(jobDTO.getStartDate());
+        job.setEndDate(jobDTO.getEndDate());
+        job.setActive(jobDTO.isActive());
+        job.setCompany(company);
+
+        // Xử lý skills
+        if (jobDTO.getSkillIds() != null && !jobDTO.getSkillIds().isEmpty()) {
+            List<Skill> dbSkills = skillRepository.findByIdIn(jobDTO.getSkillIds());
+            if (dbSkills.size() != jobDTO.getSkillIds().size()) {
+                throw new IdInvalidException("Một hoặc nhiều kỹ năng không tồn tại");
+            }
+            job.setSkills(dbSkills);
+        }
+
+        // Lưu job
+        Job savedJob = jobRepository.save(job);
+
+        // Tạo response
+        ResCreateJobDTO dto = new ResCreateJobDTO();
+        dto.setId(savedJob.getId());
+        dto.setName(savedJob.getName());
+        dto.setSalary(savedJob.getSalary());
+        dto.setQuantity(savedJob.getQuantity());
+        dto.setLocation(savedJob.getLocation());
+        dto.setLevel(savedJob.getLevel());
+        dto.setStartDate(savedJob.getStartDate());
+        dto.setEndDate(savedJob.getEndDate());
+        dto.setActive(savedJob.isActive());
+        dto.setCreatedAt(savedJob.getCreatedAt());
+        dto.setCreatedBy(savedJob.getCreatedBy());
+
+        if (savedJob.getSkills() != null) {
+            List<String> skills = savedJob.getSkills()
+                    .stream().map(Skill::getName)
+                    .collect(Collectors.toList());
+            dto.setSkills(skills);
+        }
+
+        return dto;
+    }
+
+    public ResUpdateJobDTO update(Job j, Job jobInDB) {
         // check skills
         if (j.getSkills() != null) {
             List<Long> reqSkills = j.getSkills()
@@ -139,8 +212,119 @@ public class JobService {
         return dto;
     }
 
+    public ResUpdateJobDTO updateForUserCompany(ReqUpdateJobDTO jobDTO) throws IdInvalidException {
+        // Lấy thông tin người dùng hiện tại
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
+
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        // Kiểm tra công ty của người dùng
+        Company userCompany = user.getCompany();
+        if (userCompany == null) {
+            throw new IdInvalidException("Người dùng không thuộc công ty nào");
+        }
+
+        // Kiểm tra job tồn tại
+        Optional<Job> jobOptional = jobRepository.findById(jobDTO.getId());
+        if (!jobOptional.isPresent()) {
+            throw new IdInvalidException("Công việc với id = " + jobDTO.getId() + " không tồn tại");
+        }
+
+        Job jobInDB = jobOptional.get();
+
+        // Kiểm tra job thuộc công ty của người dùng
+        if (jobInDB.getCompany() == null || jobInDB.getCompany().getId() != userCompany.getId()) {
+            throw new IdInvalidException("Bạn không có quyền cập nhật công việc này");
+        }
+
+        // Cập nhật thông tin job
+        jobInDB.setName(jobDTO.getName());
+        jobInDB.setLocation(jobDTO.getLocation());
+        jobInDB.setSalary(jobDTO.getSalary());
+        jobInDB.setQuantity(jobDTO.getQuantity());
+        jobInDB.setLevel(jobDTO.getLevel());
+        jobInDB.setDescription(jobDTO.getDescription());
+        jobInDB.setStartDate(jobDTO.getStartDate());
+        jobInDB.setEndDate(jobDTO.getEndDate());
+        jobInDB.setActive(jobDTO.isActive());
+
+        // Xử lý skills
+        if (jobDTO.getSkillIds() != null && !jobDTO.getSkillIds().isEmpty()) {
+            List<Skill> dbSkills = skillRepository.findByIdIn(jobDTO.getSkillIds());
+            if (dbSkills.size() != jobDTO.getSkillIds().size()) {
+                throw new IdInvalidException("Một hoặc nhiều kỹ năng không tồn tại");
+            }
+            jobInDB.setSkills(dbSkills);
+        } else {
+            jobInDB.setSkills(null);
+        }
+
+        // Lưu job
+        Job updatedJob = jobRepository.save(jobInDB);
+
+        // Tạo response
+        ResUpdateJobDTO dto = new ResUpdateJobDTO();
+        dto.setId(updatedJob.getId());
+        dto.setName(updatedJob.getName());
+        dto.setSalary(updatedJob.getSalary());
+        dto.setQuantity(updatedJob.getQuantity());
+        dto.setLocation(updatedJob.getLocation());
+        dto.setLevel(updatedJob.getLevel());
+        dto.setStartDate(updatedJob.getStartDate());
+        dto.setEndDate(updatedJob.getEndDate());
+        dto.setActive(updatedJob.isActive());
+        dto.setUpdatedAt(updatedJob.getUpdatedAt());
+        dto.setUpdatedBy(updatedJob.getUpdatedBy());
+
+        if (updatedJob.getSkills() != null) {
+            List<String> skills = updatedJob.getSkills()
+                    .stream().map(Skill::getName)
+                    .collect(Collectors.toList());
+            dto.setSkills(skills);
+        }
+
+        return dto;
+    }
+
     public void delete(long id) {
         this.jobRepository.deleteById(id);
+    }
+
+    public void deleteForUserCompany(long id) throws IdInvalidException {
+        // Lấy thông tin người dùng hiện tại
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
+
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        // Kiểm tra công ty của người dùng
+        Company userCompany = user.getCompany();
+        if (userCompany == null) {
+            throw new IdInvalidException("Người dùng không thuộc công ty nào");
+        }
+
+        // Kiểm tra job tồn tại
+        Optional<Job> jobOptional = jobRepository.findById(id);
+        if (!jobOptional.isPresent()) {
+            throw new IdInvalidException("Công việc với id = " + id + " không tồn tại");
+        }
+
+        Job job = jobOptional.get();
+
+        // Kiểm tra job thuộc công ty của người dùng
+        if (job.getCompany() == null || job.getCompany().getId() != userCompany.getId()) {
+            throw new IdInvalidException("Bạn không có quyền xóa công việc này");
+        }
+
+        // Xóa job
+        jobRepository.deleteById(id);
     }
 
     public ResultPaginationDTO fetchAll(Specification<Job> spec, Pageable pageable) {

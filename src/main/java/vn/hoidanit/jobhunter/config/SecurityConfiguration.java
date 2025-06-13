@@ -57,6 +57,7 @@ public class SecurityConfiguration {
                 "/api/v1/companies/**", "/api/v1/jobs/**",
                 "/api/v1/email/**",
                 "/v3/api-docs/**",
+                "/api/v1/jobs/**", // Chỉ áp dụng cho GET
                 "/swagger-ui/**",
                 "/swagger-ui.html",
                 "/ws/**",
@@ -74,7 +75,10 @@ public class SecurityConfiguration {
                                 .requestMatchers(HttpMethod.GET, "/api/v1/companies/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/v1/jobs/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/v1/jobs/by-company/**").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/v1/jobs/by-user-company").authenticated()
                                 .requestMatchers(HttpMethod.GET, "/api/v1/skills/**").permitAll()
+                                .requestMatchers(HttpMethod.PUT, "/api/v1/jobs/by-user-company").authenticated()
+                                .requestMatchers(HttpMethod.DELETE, "/api/v1/jobs/by-user-company/{id}").authenticated()
                                 .anyRequest().authenticated())
                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults())
                         .authenticationEntryPoint(customAuthenticationEntryPoint))

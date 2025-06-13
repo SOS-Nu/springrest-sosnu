@@ -18,6 +18,8 @@ import com.turkraft.springfilter.boot.Filter;
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.domain.entity.JobBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.request.ReqCreateJobDTO;
+import vn.hoidanit.jobhunter.domain.request.ReqUpdateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
@@ -107,5 +109,28 @@ public class JobController {
         }
 
         return ResponseEntity.ok(jobService.fetchJobsByCompany(companyId, spec, pageable));
+    }
+        @PostMapping("/jobs/by-user-company")
+    @ApiMessage("Create a job for user's company")
+        public ResponseEntity<ResCreateJobDTO> createForUserCompany(@Valid @RequestBody ReqCreateJobDTO jobDTO)
+                throws IdInvalidException {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(this.jobService.createForUserCompany(jobDTO));
+        }
+    
+        
+    @PutMapping("/jobs/by-user-company")
+    @ApiMessage("Update a job for user's company")
+    public ResponseEntity<ResUpdateJobDTO> updateForUserCompany(@Valid @RequestBody ReqUpdateJobDTO jobDTO)
+            throws IdInvalidException {
+        return ResponseEntity.ok()
+                .body(this.jobService.updateForUserCompany(jobDTO));
+    }
+    
+    @DeleteMapping("/jobs/by-user-company/{id}")
+    @ApiMessage("Delete a job for user's company")
+    public ResponseEntity<Void> deleteForUserCompany(@PathVariable("id") long id) throws IdInvalidException {
+        this.jobService.deleteForUserCompany(id);
+        return ResponseEntity.ok().body(null);
     }
 }
