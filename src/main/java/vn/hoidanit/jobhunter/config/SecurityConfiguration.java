@@ -62,6 +62,7 @@ public class SecurityConfiguration {
                 "/ws/**",
                 "/auth/send-otp", "/auth/verify-otp-change-password",
                 "/api/v1/payment/vnpay/**",
+                "/api/v1/jobs/by-company/**",
 
         };
         http
@@ -72,6 +73,7 @@ public class SecurityConfiguration {
                                 .requestMatchers(whiteList).permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/v1/companies/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/v1/jobs/**").permitAll()
+                                .requestMatchers(HttpMethod.GET, "/api/v1/jobs/by-company/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/v1/skills/**").permitAll()
                                 .anyRequest().authenticated())
                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults())

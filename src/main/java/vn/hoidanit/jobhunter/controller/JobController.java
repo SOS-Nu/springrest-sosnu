@@ -93,4 +93,19 @@ public class JobController {
 
         return ResponseEntity.ok().body(this.jobService.fetchAll(spec, pageable));
     }
+
+    @GetMapping("/jobs/by-company/{companyId}")
+    @ApiMessage("Fetch jobs by company id")
+    public ResponseEntity<ResultPaginationDTO> fetchJobsByCompany(
+            @PathVariable("companyId") long companyId,
+            @Filter Specification<Job> spec,
+            Pageable pageable) throws IdInvalidException {
+
+        // Kiểm tra company tồn tại
+        if (!jobService.isCompanyExist(companyId)) {
+            throw new IdInvalidException("Công ty với id = " + companyId + " không tồn tại");
+        }
+
+        return ResponseEntity.ok(jobService.fetchJobsByCompany(companyId, spec, pageable));
+    }
 }

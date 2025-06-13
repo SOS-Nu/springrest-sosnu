@@ -219,4 +219,30 @@ public class JobService {
     private boolean isJobExist(String name, Long companyId) {
         return this.jobRepository.existsByNameAndCompanyId(name, companyId);
     }
+
+    public boolean isCompanyExist(long companyId) {
+        return companyRepository.existsById(companyId);
+    }
+
+    public ResultPaginationDTO fetchJobsByCompany(long companyId, Specification<Job> spec, Pageable pageable) {
+        Specification<Job> companySpec = (root, query, criteriaBuilder) ->
+                criteriaBuilder.equal(root.get("company").get("id"), companyId);
+
+        // Kết hợp spec từ người dùng với spec của company
+        Specification<Job> finalSpec = companySpec.and(spec);
+
+        Page<Job> pageJob = jobRepository.findAll(finalSpec, pageable);
+        ResultPaginationDTO rs = new ResultPaginationDTO();
+        ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
+
+        mt.setPage(pageable.getPageNumber() + 1);
+        mt.setPageSize(pageable.getPageSize());
+        mt.setPages(pageJob.getTotalPages());
+        mt.setTotal(pageJob.getTotalElements());
+
+        rs.setMeta(mt);
+        rs.setResult(pageJob.getContent());
+
+        return rs;
+    }
 }
