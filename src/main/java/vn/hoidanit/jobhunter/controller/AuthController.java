@@ -87,7 +87,9 @@ public class AuthController {
                     currentUserDB.getId(),
                     currentUserDB.getEmail(),
                     currentUserDB.getName(),
-                    currentUserDB.getRole());
+                    currentUserDB.getRole(),
+                    currentUserDB.isVip()
+                            );
             res.setUser(userLogin);
         }
 
@@ -154,7 +156,9 @@ public class AuthController {
             // Tạo response
             ResLoginDTO res = new ResLoginDTO();
             ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin(
-                    user.getId(), user.getEmail(), user.getName(), user.getRole());
+                    user.getId(), user.getEmail(), user.getName(), user.getRole(),
+                    user.isVip()
+                    );
             res.setUser(userLogin);
 
             // Tạo access token
@@ -230,7 +234,9 @@ public class AuthController {
                     currentUserDB.getId(),
                     currentUserDB.getEmail(),
                     currentUserDB.getName(),
-                    currentUserDB.getRole());
+                    currentUserDB.getRole(),
+                    currentUserDB.isVip()
+                    );
             res.setUser(userLogin);
         }
 
