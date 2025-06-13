@@ -64,6 +64,9 @@ public class SecurityConfiguration {
                 "/auth/send-otp", "/auth/verify-otp-change-password",
                 "/api/v1/payment/vnpay/**",
                 "/api/v1/jobs/by-company/**",
+                "/api/v1/comments/**",
+                "/api/v1/jobs/by-company/**",
+                "/api/v1/skills/**",
 
         };
         http
@@ -72,14 +75,11 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(
                         authz -> authz
                                 .requestMatchers(whiteList).permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/v1/companies/**").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/v1/jobs/**").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/v1/jobs/by-company/**").permitAll()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/jobs/by-user-company").authenticated()
-                                .requestMatchers(HttpMethod.GET, "/api/v1/skills/**").permitAll()
                                 .requestMatchers(HttpMethod.PUT, "/api/v1/jobs/by-user-company").authenticated()
                                 .requestMatchers(HttpMethod.DELETE, "/api/v1/jobs/by-user-company/{id}").authenticated()
-                                .requestMatchers(HttpMethod.POST, "/api/v1/companies/by-user").authenticated()
+                                .requestMatchers(HttpMethod.POST, "/api/v1/companies/by-user").authenticated() //tao company by new user
+                                .requestMatchers(HttpMethod.POST, "/api/v1/comments").authenticated()
                                 .anyRequest().authenticated())
                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults())
                         .authenticationEntryPoint(customAuthenticationEntryPoint))

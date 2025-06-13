@@ -28,6 +28,7 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 "/users-connected",
                 "/user.disconnectUser",
                 "/user.addUser",
+                        "/api/v1/comments/**"
 
         };
         registry.addInterceptor(getPermissionInterceptor())
