@@ -38,6 +38,10 @@ dependencies {
 	implementation("com.opencsv:opencsv:5.8")
 	implementation("com.google.auth:google-auth-library-oauth2-http:1.23.0")
 	implementation("com.google.api-client:google-api-client:2.7.0")
+	implementation("org.apache.tika:tika-core:2.9.1")
+    implementation("org.apache.tika:tika-parsers-standard-package:2.9.1")
+
+
 }
 
 tasks.withType<Test> {

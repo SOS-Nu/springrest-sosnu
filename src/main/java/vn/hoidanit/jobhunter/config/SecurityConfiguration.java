@@ -67,7 +67,8 @@ public class SecurityConfiguration {
                 "/api/v1/comments/**",
                 "/api/v1/jobs/by-company/**",
                 "/api/v1/skills/**",
-                                "/api/v1/users/detail/**"
+                "/api/v1/users/detail/**",
+                                        "/api/v1/gemini/**",
 
         };
         http

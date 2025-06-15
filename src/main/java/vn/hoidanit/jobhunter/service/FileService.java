@@ -12,10 +12,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
+import org.apache.tika.Tika;
+import org.apache.tika.exception.TikaException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+
+
 
 @Service
 public class FileService {
@@ -72,5 +76,23 @@ public class FileService {
 
         File file = new File(path.toString());
         return new InputStreamResource(new FileInputStream(file));
+    }
+
+
+    /**
+     * PHƯƠNG THỨC ĐÃ CẬP NHẬT: Trích xuất nội dung văn bản từ một file.
+     * @param file File đầu vào (PDF, DOCX, TXT, etc.)
+     * @return Nội dung văn bản của file
+     * @throws IOException
+     */
+    public String extractTextFromFile(MultipartFile file) throws IOException {
+        Tika tika = new Tika();
+        try (InputStream stream = file.getInputStream()) {
+            return tika.parseToString(stream);
+        } catch (TikaException e) {
+            // Bắt TikaException và ném ra một IOException để Controller xử lý
+            // Điều này giúp giữ cho các lớp gọi không cần biết về TikaException cụ thể
+            throw new IOException("Lỗi khi phân tích cú pháp file: " + e.getMessage(), e);
+        }
     }
 }
