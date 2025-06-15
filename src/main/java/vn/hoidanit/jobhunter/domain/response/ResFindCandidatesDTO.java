@@ -12,6 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ResFindCandidatesDTO {
-    private List<ResUserDetailDTO> candidates;
+    // Thay đổi kiểu dữ liệu của danh sách này
+    private List<ResCandidateWithScoreDTO> candidates;
     private ResultPaginationDTO.Meta meta;
 }

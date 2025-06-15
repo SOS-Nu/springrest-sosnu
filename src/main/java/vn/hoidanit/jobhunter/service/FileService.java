@@ -95,4 +95,25 @@ public class FileService {
             throw new IOException("Lỗi khi phân tích cú pháp file: " + e.getMessage(), e);
         }
     }
+
+      /**
+     * PHƯƠNG THỨC MỚI: Đọc một file từ storage và trả về dưới dạng byte array.
+     * @param fileName Tên file
+     * @param folder Thư mục chứa file
+     * @return a byte array of the file content
+     * @throws IOException
+     * @throws URISyntaxException
+     */
+    public byte[] readFileAsBytes(String fileName, String folder) throws IOException, URISyntaxException {
+        if (fileName == null || folder == null) return null;
+        
+        URI uri = new URI(baseURI + folder + "/" + fileName);
+        Path path = Paths.get(uri);
+        
+        if (Files.exists(path) && !Files.isDirectory(path)) {
+            return Files.readAllBytes(path);
+        }
+        
+        return null; // Trả về null nếu file không tồn tại
+    }
 }

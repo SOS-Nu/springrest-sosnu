@@ -18,6 +18,8 @@ public class ResUserDetailDTO {
     private int age;
     private GenderEnum gender;
     private String address;
+    private String mainResume;
+
 
     private ResOnlineResumeDTO.ResGetOnlineResumeDTO onlineResume;
     private List<ResWorkExperienceDTO.WorkExperienceResponse> workExperiences;
@@ -32,6 +34,7 @@ public class ResUserDetailDTO {
         dto.setAge(user.getAge());
         dto.setGender(user.getGender());
         dto.setAddress(user.getAddress());
+        dto.setMainResume(user.getMainResume());
 
         // Map thông tin OnlineResume nếu có
         if (user.getOnlineResume() != null) {
