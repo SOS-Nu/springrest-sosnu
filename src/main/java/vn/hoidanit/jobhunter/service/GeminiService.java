@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.Setter;
+
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpEntity;
@@ -18,6 +21,10 @@ import vn.hoidanit.jobhunter.domain.response.ResCandidateWithScoreDTO;
 import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
+import vn.hoidanit.jobhunter.domain.response.job.ResFindJobsDTO;
+import vn.hoidanit.jobhunter.domain.response.job.ResJobWithScoreDTO;
+import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 import java.io.IOException;
@@ -34,6 +41,8 @@ public class GeminiService {
     private final UserService userService;
     private final FileService fileService;
     private final ObjectMapper objectMapper;
+    private final JobRepository jobRepository; // THÊM REPOSITORY NÀY
+    private final JobService jobService; // THÊM SERVICE NÀY
 
     @Value("${gemini.api.key}")
     private String geminiApiKey;
@@ -41,11 +50,14 @@ public class GeminiService {
     @Value("${gemini.api.url}")
     private String geminiApiUrl;
 
-    public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService, ObjectMapper objectMapper) {
+    public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService,
+            ObjectMapper objectMapper,JobRepository jobRepository,JobService jobService) {
         this.restTemplate = restTemplate;
         this.userService = userService;
         this.fileService = fileService;
         this.objectMapper = objectMapper;
+        this.jobRepository = jobRepository;
+        this.jobService = jobService;
     }
 
 
@@ -230,5 +242,115 @@ public class GeminiService {
             System.err.println("Error calling Gemini API for scoring: " + e.getMessage());
             return 0; // Trả về 0 nếu có lỗi
         }
+    }
+
+     /**
+     * PHƯƠNG THỨC MỚI: Tìm các công việc phù hợp cho ứng viên.
+     */
+    public ResFindJobsDTO findJobsForCandidate(
+        String skillsDescription, byte[] cvFileBytes, String cvFileName) throws IdInvalidException {
+        
+        List<ResJobWithScoreDTO> suitableJobs = new ArrayList<>();
+        ResultPaginationDTO.Meta lastMeta = null;
+        int currentPage = 0;
+        final int PAGE_SIZE = 10;
+        final int TARGET_JOBS = 10;
+
+        while (suitableJobs.size() < TARGET_JOBS) {
+            Pageable pageable = PageRequest.of(currentPage, PAGE_SIZE);
+            Page<Job> paginatedJobs = jobRepository.findAll(pageable);
+            
+            if (paginatedJobs.getContent().isEmpty()) {
+                break; // Hết công việc để kiểm tra
+            }
+            
+            // SỬA LỖI TẠI ĐÂY
+            lastMeta = new ResultPaginationDTO.Meta();
+            lastMeta.setPage(paginatedJobs.getNumber() + 1);
+            lastMeta.setPageSize(paginatedJobs.getSize());
+            lastMeta.setPages(paginatedJobs.getTotalPages());
+            lastMeta.setTotal(paginatedJobs.getTotalElements());
+
+            List<Job> currentJobs = paginatedJobs.getContent();
+            Map<Long, Job> jobMap = currentJobs.stream()
+                .collect(Collectors.toMap(Job::getId, Function.identity()));
+
+            List<GeminiJobScoreResponse> rankedJobs = rankJobsWithGemini(
+                skillsDescription, cvFileBytes, cvFileName, currentJobs);
+
+            for (GeminiJobScoreResponse rankedJob : rankedJobs) {
+                if (suitableJobs.size() >= TARGET_JOBS) break;
+
+                Job jobDetail = jobMap.get(rankedJob.getJobId());
+                if (jobDetail != null) {
+                    ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
+                    suitableJobs.add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
+                }
+            }
+            currentPage++;
+        }
+
+        suitableJobs.sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
+        return new ResFindJobsDTO(suitableJobs, lastMeta);
+    }
+
+    private List<GeminiJobScoreResponse> rankJobsWithGemini(
+        String skillsDescription, byte[] cvFileBytes, String cvFileName, List<Job> jobs) {
+        
+        List<Map<String, Object>> parts = new ArrayList<>();
+        
+        String initialPrompt = "You are an expert career advisor. Based on the candidate's skills and/or resume, please evaluate the following job openings. " +
+                               "Prioritize the information in the attached resume file if it exists.\n\n" +
+                               "Candidate's Information:";
+        parts.add(Map.of("text", initialPrompt));
+        
+        // Thêm thông tin ứng viên (text hoặc file)
+        if (cvFileBytes != null) {
+            String encodedFile = Base64.getEncoder().encodeToString(cvFileBytes);
+            parts.add(Map.of("inlineData", Map.of("mimeType", getMimeType(cvFileName), "data", encodedFile)));
+            if (skillsDescription != null && !skillsDescription.isEmpty()) {
+                parts.add(Map.of("text", "Additional skills summary: " + skillsDescription));
+            }
+        } else {
+            parts.add(Map.of("text", skillsDescription));
+        }
+
+        try {
+            // Thêm thông tin các công việc
+            String jobsJson = objectMapper.writeValueAsString(jobs.stream().map(jobService::convertToResFetchJobDTO).collect(Collectors.toList()));
+            parts.add(Map.of("text", "\n\nHere are the job openings to evaluate:\n" + jobsJson));
+        } catch (Exception e) {
+            System.err.println("Error converting jobs to JSON: " + e.getMessage());
+        }
+
+        // Yêu cầu cuối cùng
+        String finalPrompt = "\n\nAfter analyzing all jobs, return a JSON array of objects. Each object must have 'jobId' and 'score' (0-100). " +
+                             "Rank them from highest score to lowest. Only include jobs that are a good match. " +
+                             "Response (JSON array of objects only):";
+        parts.add(Map.of("text", finalPrompt));
+        
+        try {
+            // Gửi request tới Gemini (logic giữ nguyên)
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of("contents", Collections.singletonList(Map.of("parts", parts))), headers);
+            String url = geminiApiUrl + "?key=" + geminiApiKey;
+            String response = restTemplate.postForObject(url, entity, String.class);
+            JsonNode root = objectMapper.readTree(response);
+            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
+
+            return objectMapper.readValue(cleanedJson, objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiJobScoreResponse.class));
+        } catch (Exception e) {
+            System.err.println("Error calling Gemini API for finding jobs: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // Helper class để parse response
+    @Getter @Setter
+    private static class GeminiJobScoreResponse {
+        private long jobId;
+        private int score;
     }
 }

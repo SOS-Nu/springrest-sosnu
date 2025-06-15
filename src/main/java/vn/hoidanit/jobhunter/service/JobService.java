@@ -22,6 +22,7 @@ import vn.hoidanit.jobhunter.domain.request.ReqUpdateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
+import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
 import vn.hoidanit.jobhunter.repository.CompanyRepository;
 import vn.hoidanit.jobhunter.repository.JobRepository;
@@ -409,8 +410,8 @@ public class JobService {
     }
 
     public ResultPaginationDTO fetchJobsByCompany(long companyId, Specification<Job> spec, Pageable pageable) {
-        Specification<Job> companySpec = (root, query, criteriaBuilder) ->
-                criteriaBuilder.equal(root.get("company").get("id"), companyId);
+        Specification<Job> companySpec = (root, query, criteriaBuilder) -> criteriaBuilder
+                .equal(root.get("company").get("id"), companyId);
 
         // Kết hợp spec từ người dùng với spec của company
         Specification<Job> finalSpec = companySpec.and(spec);
@@ -428,5 +429,44 @@ public class JobService {
         rs.setResult(pageJob.getContent());
 
         return rs;
+    }
+    
+      /**
+     * PHƯƠNG THỨC MỚI: Chuyển đổi Job Entity sang ResFetchJobDTO.
+     */
+    public ResFetchJobDTO convertToResFetchJobDTO(Job job) {
+        ResFetchJobDTO dto = new ResFetchJobDTO();
+        dto.setId(job.getId());
+        dto.setName(job.getName());
+        dto.setLocation(job.getLocation());
+        dto.setSalary(job.getSalary());
+        dto.setQuantity(job.getQuantity());
+        dto.setLevel(job.getLevel() != null ? job.getLevel().name() : null);
+        dto.setDescription(job.getDescription());
+        dto.setStartDate(job.getStartDate());
+        dto.setEndDate(job.getEndDate());
+        dto.setActive(job.isActive());
+        dto.setCreatedAt(job.getCreatedAt());
+        dto.setUpdatedAt(job.getUpdatedAt());
+        dto.setCreatedBy(job.getCreatedBy());
+        dto.setUpdatedBy(job.getUpdatedBy());
+
+        if (job.getCompany() != null) {
+            ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
+            companyInfo.setId(job.getCompany().getId());
+            companyInfo.setName(job.getCompany().getName());
+            dto.setCompany(companyInfo);
+        }
+
+        if (job.getSkills() != null) {
+            dto.setSkills(job.getSkills().stream().map(skill -> {
+                ResFetchJobDTO.SkillInfo skillInfo = new ResFetchJobDTO.SkillInfo();
+                skillInfo.setId(skill.getId());
+                skillInfo.setName(skill.getName());
+                return skillInfo;
+            }).collect(Collectors.toList()));
+        }
+
+        return dto;
     }
 }
