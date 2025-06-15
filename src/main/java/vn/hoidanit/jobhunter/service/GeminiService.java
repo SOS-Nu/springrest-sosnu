@@ -12,6 +12,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
+import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.domain.response.ResCandidateWithScoreDTO;
 import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
@@ -164,11 +166,69 @@ public class GeminiService {
     }
 
     private String getMimeType(String fileName) {
-        if (fileName == null) return "application/octet-stream";
+        if (fileName == null)
+            return "application/octet-stream";
         String lowerCaseFileName = fileName.toLowerCase();
-        if (lowerCaseFileName.endsWith(".pdf")) return "application/pdf";
-        if (lowerCaseFileName.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        if (lowerCaseFileName.endsWith(".pdf"))
+            return "application/pdf";
+        if (lowerCaseFileName.endsWith(".docx"))
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         // ... các mime type khác
         return "application/octet-stream";
+    }
+    
+     /**
+     * PHƯƠNG THỨC MỚI: Chấm điểm một CV so với mô tả công việc.
+     * @param job Thông tin chi tiết về công việc.
+     * @param cvFileBytes Nội dung file CV dưới dạng byte array.
+     * @param cvFileName Tên file CV để xác định mime-type.
+     * @return Điểm số từ 0-100.
+     */
+    public int scoreCvAgainstJob(Job job, byte[] cvFileBytes, String cvFileName) {
+        // Xây dựng mô tả công việc từ các trường
+        String jobDetails = String.format(
+            "Job Title: %s\nLocation: %s\nLevel: %s\nDescription: %s",
+            job.getName(), job.getLocation(), job.getLevel(), job.getDescription()
+        );
+
+        // Xây dựng prompt
+        List<Map<String, Object>> parts = new ArrayList<>();
+        
+        String promptText = "As an expert HR, please evaluate the following resume against the job description. " +
+                            "Provide a suitability score on a scale of 0 to 100. " +
+                            "Return ONLY a JSON object with a single key 'score'. Example: {\"score\": 95}\n\n" +
+                            "Job Description:\n" + jobDetails + "\n\n" +
+                            "Candidate's Resume:";
+        parts.add(Map.of("text", promptText));
+
+        // Thêm dữ liệu file CV
+        String encodedFile = Base64.getEncoder().encodeToString(cvFileBytes);
+        parts.add(Map.of("inlineData", Map.of(
+            "mimeType", getMimeType(cvFileName),
+            "data", encodedFile
+        )));
+
+        // Gửi request tới Gemini
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Map<String, Object> content = Map.of("parts", parts);
+            Map<String, Object> requestBody = Map.of("contents", Collections.singletonList(content));
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            String url = geminiApiUrl + "?key=" + geminiApiKey;
+            String response = restTemplate.postForObject(url, entity, String.class);
+
+            // Parse response
+            JsonNode root = objectMapper.readTree(response);
+            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
+            JsonNode scoreNode = objectMapper.readTree(cleanedJson);
+            
+            return scoreNode.path("score").asInt(0); // Trả về 0 nếu không tìm thấy score
+
+        } catch (Exception e) {
+            System.err.println("Error calling Gemini API for scoring: " + e.getMessage());
+            return 0; // Trả về 0 nếu có lỗi
+        }
     }
 }

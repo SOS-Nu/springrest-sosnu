@@ -29,6 +29,7 @@ public class ResFetchResumeDTO {
     private UserResume user;
     private JobResume job;
 
+    private int score;
     @Getter
     @Setter
     @AllArgsConstructor

@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.turkraft.springfilter.builder.FilterBuilder;
 import com.turkraft.springfilter.converter.FilterSpecification;
@@ -45,15 +46,19 @@ public class ResumeService {
     private final UserRepository userRepository;
     private final JobRepository jobRepository;
     private final UserService userService;
+    private final GeminiService geminiService;
+    private final FileService fileService;
 
     public ResumeService(
             ResumeRepository resumeRepository,
             UserRepository userRepository,
-            UserService userService, JobRepository jobRepository) {
+            UserService userService, JobRepository jobRepository,GeminiService geminiService, FileService fileService) {
         this.resumeRepository = resumeRepository;
         this.userRepository = userRepository;
         this.jobRepository = jobRepository;
         this.userService = userService;
+        this.geminiService = geminiService;
+        this.fileService = fileService;
 
     }
 
@@ -79,24 +84,60 @@ public class ResumeService {
         return true;
     }
 
+    @Transactional
     public ResCreateResumeDTO create(Resume resume) throws IdInvalidException {
         String email = SecurityUtil.getCurrentUserLogin().orElseThrow(
                 () -> new IdInvalidException("Bạn cần đăng nhập để rải CV"));
+
         if (!userService.canSubmitCv(email)) {
             throw new IdInvalidException("Bạn đã hết lượt rải CV trong tháng này. Hãy nâng cấp lên VIP để rải thêm!");
         }
 
-        if (!checkResumeExistByUserAndJob(resume)) {
-            throw new IdInvalidException("User hoặc Job không tồn tại");
-        }
+        // Lấy thông tin Job đầy đủ
+        Job job = this.jobRepository.findById(resume.getJob().getId())
+                    .orElseThrow(() -> new IdInvalidException("Job với id=" + resume.getJob().getId() + " không tồn tại"));
+        
+        // Gán lại Job và User đầy đủ cho đối tượng resume
+        resume.setJob(job);
+        this.userRepository.findById(resume.getUser().getId()).ifPresent(resume::setUser);
 
-        resume = this.resumeRepository.save(resume);
+        // LOGIC CHẤM ĐIỂM
+        int score = 0;
+        String cvFileName = resume.getUrl();
+        System.out.println("Bắt đầu chấm điểm cho CV: " + cvFileName);
+
+        if (cvFileName == null || cvFileName.isEmpty()) {
+            System.out.println("CV không có file đính kèm (url is null). Bỏ qua chấm điểm.");
+        } else {
+            try {
+                // SỬA LỖI TẠI ĐÂY: đổi "resumes" thành "resume"
+                byte[] cvFileBytes = this.fileService.readFileAsBytes(cvFileName, "resume"); 
+                if (cvFileBytes != null) {
+                    System.out.println("Đã đọc file CV thành công. Đang gửi tới Gemini để chấm điểm...");
+                    score = this.geminiService.scoreCvAgainstJob(job, cvFileBytes, cvFileName);
+                    System.out.println("Gemini đã trả về điểm số: " + score);
+                } else {
+                     System.out.println("Không tìm thấy file CV '" + cvFileName + "' trong thư mục storage/resume.");
+                }
+            } catch (Exception e) {
+                System.err.println("Lỗi nghiêm trọng khi chấm điểm CV bằng Gemini cho job " + job.getId() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        resume.setScore(score);
+
+        // Lưu resume với điểm số vào DB
+        Resume savedResume = this.resumeRepository.save(resume);
+        System.out.println("Đã lưu Resume vào DB với id=" + savedResume.getId() + " và score=" + savedResume.getScore());
+        
         userService.incrementCvSubmission(email);
 
+        // Trả về DTO
         ResCreateResumeDTO res = new ResCreateResumeDTO();
-        res.setId(resume.getId());
-        res.setCreatedBy(resume.getCreatedBy());
-        res.setCreatedAt(resume.getCreatedAt());
+        res.setId(savedResume.getId());
+        res.setCreatedBy(savedResume.getCreatedBy());
+        res.setCreatedAt(savedResume.getCreatedAt());
 
         return res;
     }
@@ -113,7 +154,7 @@ public class ResumeService {
         this.resumeRepository.deleteById(id);
     }
 
-    public ResFetchResumeDTO getResume(Resume resume) {
+     public ResFetchResumeDTO getResume(Resume resume) {
         ResFetchResumeDTO res = new ResFetchResumeDTO();
         res.setId(resume.getId());
         res.setEmail(resume.getEmail());
@@ -123,6 +164,7 @@ public class ResumeService {
         res.setCreatedBy(resume.getCreatedBy());
         res.setUpdatedAt(resume.getUpdatedAt());
         res.setUpdatedBy(resume.getUpdatedBy());
+        res.setScore(resume.getScore()); // Thêm điểm
 
         if (resume.getJob() != null) {
             res.setCompanyName(resume.getJob().getCompany().getName());

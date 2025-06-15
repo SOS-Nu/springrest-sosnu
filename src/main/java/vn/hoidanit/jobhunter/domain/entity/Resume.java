@@ -42,6 +42,7 @@ public class Resume {
 
     private String createdBy;
     private String updatedBy;
+    private int score;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
