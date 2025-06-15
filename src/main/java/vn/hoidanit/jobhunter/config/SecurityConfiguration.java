@@ -67,6 +67,7 @@ public class SecurityConfiguration {
                 "/api/v1/comments/**",
                 "/api/v1/jobs/by-company/**",
                 "/api/v1/skills/**",
+                                "/api/v1/users/detail/**"
 
         };
         http
@@ -80,6 +81,9 @@ public class SecurityConfiguration {
                                 .requestMatchers(HttpMethod.DELETE, "/api/v1/jobs/by-user-company/{id}").authenticated()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/companies/by-user").authenticated() //tao company by new user
                                 .requestMatchers(HttpMethod.POST, "/api/v1/comments").authenticated()
+                                .requestMatchers(HttpMethod.POST, "/api/v1/users/main-resume").authenticated()
+                                .requestMatchers("/api/v1/online-resumes/**").authenticated()
+                                .requestMatchers("/api/v1/work-experiences/**").authenticated()
                                 .anyRequest().authenticated())
                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults())
                         .authenticationEntryPoint(customAuthenticationEntryPoint))

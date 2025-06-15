@@ -1,6 +1,7 @@
 package vn.hoidanit.jobhunter.controller;
 
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.turkraft.springfilter.boot.Filter;
 
@@ -11,11 +12,16 @@ import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
+import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.domain.response.file.ResUploadFileDTO;
 import vn.hoidanit.jobhunter.service.UserService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+import vn.hoidanit.jobhunter.util.error.StorageException;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
@@ -29,6 +35,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 
 @RestController
@@ -113,5 +120,34 @@ public class UserController {
         ResBulkCreateUserDTO result = this.userService.handleBulkCreateUsers(userDTOs);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
+    
+    @PostMapping("/users/main-resume")
+    @ApiMessage("Upload main resume for user")
+    public ResponseEntity<ResUploadFileDTO> uploadMainResume(
+            @RequestParam(name = "file", required = false) MultipartFile file) 
+            throws URISyntaxException, IOException, StorageException, IdInvalidException {
+        return ResponseEntity.ok().body(userService.uploadMainResume(file));
+    }
+
+    @GetMapping("/users/detail/{id}")
+    @ApiMessage("Lấy chi tiết thông tin user theo ID")
+    public ResponseEntity<ResUserDetailDTO> getUserDetailById(@PathVariable("id") long id) throws IdInvalidException {
+        ResUserDetailDTO userDetail = this.userService.fetchUserDetailById(id);
+        return ResponseEntity.ok(userDetail);
+    }
+
+        /**
+     * ENDPOINT MỚI: Lấy danh sách chi tiết người dùng với phân trang.
+     * @param pageable Spring sẽ tự động tạo đối tượng này từ các tham số ?page= & ?size=
+     * @return ResponseEntity chứa đối tượng phân trang với danh sách chi tiết người dùng
+     */
+    @GetMapping("/users/detail")
+    @ApiMessage("Lấy danh sách chi tiết người dùng với phân trang và bộ lọc")
+    public ResponseEntity<ResultPaginationDTO> getAllUserDetails(
+            @Filter Specification<User> spec,
+            Pageable pageable) {
+        return ResponseEntity.ok(this.userService.fetchAllUserDetails(spec, pageable));
+    }
+
 
 }

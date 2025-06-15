@@ -1,12 +1,17 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -14,9 +19,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import vn.hoidanit.jobhunter.domain.entity.ChatRoom;
 import vn.hoidanit.jobhunter.domain.entity.Company;
+import vn.hoidanit.jobhunter.domain.entity.OnlineResume;
 import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.entity.UserBulkCreateDTO;
@@ -24,34 +31,83 @@ import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
+import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.domain.response.file.ResUploadFileDTO;
 import vn.hoidanit.jobhunter.repository.ChatRoomRepository;
 import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
+import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+import vn.hoidanit.jobhunter.util.error.StorageException;
 
 @Service
 public class UserService {
 
     private final PasswordEncoder passwordEncoder;
-
     private final UserRepository userRepository;
     private CompanyService companyService;
     private RoleService roleService;
     private final RoleRepository roleRepository;
     private final ChatRoomRepository chatRoomRepository;
+    private final FileService fileService;
+    private final OnlineResumeService onlineResumeService;
 
     public UserService(UserRepository userRepository, CompanyService companyService,
             RoleService roleService, PasswordEncoder passwordEncoder, RoleRepository roleRepository,
-            ChatRoomRepository chatRoomRepository) {
+            ChatRoomRepository chatRoomRepository, FileService fileService,OnlineResumeService onlineResumeService) {
         this.userRepository = userRepository;
         this.companyService = companyService;
         this.roleService = roleService;
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
         this.chatRoomRepository = chatRoomRepository;
+        this.fileService = fileService;
+        this.onlineResumeService = onlineResumeService;
+    }
+    
+    @Value("${hoidanit.upload-file.base-uri}")
+    private String baseURI;
+
+    @Transactional
+    public ResUploadFileDTO uploadMainResume(MultipartFile file) 
+            throws IdInvalidException, StorageException, IOException, URISyntaxException {
+        // Lấy thông tin người dùng hiện tại
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
+
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        // Kiểm tra file
+        if (file == null || file.isEmpty()) {
+            throw new StorageException("File CV trống. Vui lòng chọn một file.");
+        }
+
+        String fileName = file.getOriginalFilename();
+        List<String> allowedExtensions = Arrays.asList("pdf", "doc", "docx", "jpg", "jpeg", "png");
+        boolean isValid = allowedExtensions.stream().anyMatch(item -> fileName.toLowerCase().endsWith(item));
+        if (!isValid) {
+            throw new StorageException("Định dạng file không hợp lệ. Chỉ hỗ trợ: " + allowedExtensions.toString());
+        }
+
+        // Tạo thư mục resumes nếu chưa tồn tại
+        String folder = "resumes";
+        fileService.createDirectory(baseURI + folder);
+
+        // Upload file
+        String uploadedFileName = fileService.store(file, folder);
+
+        // Cập nhật main_resume cho người dùng
+        user.setMainResume(uploadedFileName);
+        userRepository.save(user);
+
+        // Tạo response
+        return new ResUploadFileDTO(uploadedFileName, Instant.now());
     }
 
     public User handleCreateUser(User user) {
@@ -337,4 +393,38 @@ public class UserService {
         return this.userRepository.findById(id).get();
     }
 
+        @Transactional(readOnly = true)
+        public ResUserDetailDTO fetchUserDetailById(long id) throws IdInvalidException {
+            User user = this.userRepository.findById(id)
+                    .orElseThrow(() -> new IdInvalidException("User với id = " + id + " không tồn tại"));
+
+            // Hibernate sẽ tự động fetch các collection (workExperiences) và object (onlineResume)
+            // do chúng ta truy cập chúng trong một phiên giao dịch (transactional session).
+            return ResUserDetailDTO.convertToDTO(user);
+        }
+    
+        @Transactional(readOnly = true)
+        public ResultPaginationDTO fetchAllUserDetails(Specification<User> spec, Pageable pageable) {
+            // Cập nhật lời gọi repository để bao gồm cả specification
+            Page<User> pageUser = this.userRepository.findAll(spec, pageable);
+    
+            ResultPaginationDTO rs = new ResultPaginationDTO();
+            ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
+    
+            // Thiết lập thông tin meta cho phân trang
+            mt.setPage(pageable.getPageNumber() + 1);
+            mt.setPageSize(pageable.getPageSize());
+            mt.setPages(pageUser.getTotalPages());
+            mt.setTotal(pageUser.getTotalElements());
+            rs.setMeta(mt);
+    
+            // Chuyển đổi danh sách User sang danh sách ResUserDetailDTO
+            List<ResUserDetailDTO> listUserDetails = pageUser.getContent().stream()
+                    .map(ResUserDetailDTO::convertToDTO)
+                    .collect(Collectors.toList());
+    
+            rs.setResult(listUserDetails);
+    
+            return rs;
+        }
 }

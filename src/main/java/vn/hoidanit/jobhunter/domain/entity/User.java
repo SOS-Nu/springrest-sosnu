@@ -17,6 +17,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -45,6 +46,8 @@ public class User {
     private String password;
 
     private int age;
+    // Thêm trường main_resume
+    private String mainResume;
 
     @Enumerated(EnumType.STRING)
     private GenderEnum gender;
@@ -77,6 +80,18 @@ public class User {
     @ManyToOne
     @JoinColumn(name = "role_id")
     private Role role;
+
+    // quan hệ với OnlineResume và WorkExperience
+    //onetoone giữa user và online resume
+    //onetoone giữa user va workexperience
+    // Thêm mối quan hệ OneToOne với OnlineResume
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JoinColumn(name = "online_resume_id", referencedColumnName = "id")
+    private OnlineResume onlineResume;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<WorkExperience> workExperiences;
+
 
     @PrePersist
     public void handleBeforeCreate() {

@@ -110,7 +110,7 @@ public class JobController {
 
         return ResponseEntity.ok(jobService.fetchJobsByCompany(companyId, spec, pageable));
     }
-        @PostMapping("/jobs/by-user-company")
+    @PostMapping("/jobs/by-user-company")
     @ApiMessage("Create a job for user's company")
         public ResponseEntity<ResCreateJobDTO> createForUserCompany(@Valid @RequestBody ReqCreateJobDTO jobDTO)
                 throws IdInvalidException {
