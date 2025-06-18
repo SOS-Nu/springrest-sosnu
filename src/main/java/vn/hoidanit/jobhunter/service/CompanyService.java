@@ -16,6 +16,7 @@ import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.request.ReqCreateCompanyDTO;
+import vn.hoidanit.jobhunter.domain.request.ReqUpdateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.repository.CompanyRepository;
@@ -37,75 +38,48 @@ public class CompanyService {
         this.roleRepository = roleRepository;
     }
 
+    // API FOR ADMIN
+    @Transactional
     public Company handleCreateCompany(Company c) {
         return this.companyRepository.save(c);
     }
 
+    // API FOR ADMIN
     @Transactional
-    public ResCreateCompanyDTO createCompanyByUser(ReqCreateCompanyDTO reqCompany) throws IdInvalidException {
-        // Lấy thông tin người dùng hiện tại
-        String email = SecurityUtil.getCurrentUserLogin()
-                .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
+    public Company handleUpdateCompany(Company c) {
+        Optional<Company> companyOptional = this.companyRepository.findById(c.getId());
+        if (companyOptional.isPresent()) {
+            Company currentCompany = companyOptional.get();
+            currentCompany.setName(c.getName());
+            currentCompany.setDescription(c.getDescription());
+            currentCompany.setAddress(c.getAddress());
+            currentCompany.setLogo(c.getLogo());
 
-        User user = userRepository.findByEmail(email);
-        if (user == null) {
-            throw new IdInvalidException("Người dùng không tồn tại");
+            // CẬP NHẬT: Thêm các trường mới cho API của admin
+            currentCompany.setField(c.getField());
+            currentCompany.setWebsite(c.getWebsite());
+            currentCompany.setScale(c.getScale());
+            currentCompany.setCountry(c.getCountry());
+            currentCompany.setFoundingYear(c.getFoundingYear());
+            
+            return this.companyRepository.save(currentCompany);
+        }
+        return null;
+    }
+
+    // API FOR ADMIN
+    @Transactional
+    public void handleDeleteCompany(long id) {
+        Optional<Company> comOptional = this.companyRepository.findById(id);
+        if (comOptional.isPresent()) {
+            Company com = comOptional.get();
+            // Lấy tất cả user thuộc công ty này và xóa họ
+            // Lưu ý: Logic này có thể cần xem xét lại tùy vào yêu cầu nghiệp vụ
+            List<User> users = this.userRepository.findByCompany(com);
+            this.userRepository.deleteAll(users);
         }
 
-        // Kiểm tra tài khoản VIP
-        if (!user.isVip() || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
-            user.setVip(false);
-            userRepository.save(user);
-            throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công ty");
-        }
-
-        // Kiểm tra người dùng đã có công ty
-        if (user.getCompany() != null) {
-            throw new IdInvalidException("Bạn đã tạo một công ty. Mỗi người dùng chỉ được tạo một công ty");
-        }
-
-        // Tạo công ty mới
-        Company company = new Company();
-        company.setName(reqCompany.getName());
-        company.setDescription(reqCompany.getDescription());
-        company.setAddress(reqCompany.getAddress());
-        company.setLogo(reqCompany.getLogo());
-        company.setField(reqCompany.getField());
-        company.setWebsite(reqCompany.getWebsite());
-        company.setScale(reqCompany.getScale());
-        company.setCountry(reqCompany.getCountry());
-        company.setEstablishedYear(reqCompany.getEstablishedYear());
-
-        // Lưu công ty
-        Company savedCompany = companyRepository.save(company);
-
-        // Cập nhật company_id cho người dùng
-        user.setCompany(savedCompany);
-
-        // Gán role EMPLOYER cho người dùng
-        Role employerRole = roleRepository.findByName("EMPLOYER");
-        if (employerRole == null) {
-            throw new IdInvalidException("Role EMPLOYER không tồn tại");
-        }
-        user.setRole(employerRole);
-
-        userRepository.save(user);
-
-        // Tạo response
-        ResCreateCompanyDTO response = new ResCreateCompanyDTO();
-        response.setId(savedCompany.getId());
-        response.setName(savedCompany.getName());
-        response.setDescription(savedCompany.getDescription());
-        response.setAddress(savedCompany.getAddress());
-        response.setLogo(savedCompany.getLogo());
-        response.setField(savedCompany.getField());
-        response.setWebsite(savedCompany.getWebsite());
-        response.setScale(savedCompany.getScale());
-        response.setCountry(savedCompany.getCountry());
-        response.setEstablishedYear(savedCompany.getEstablishedYear());
-        response.setCreatedAt(savedCompany.getCreatedAt());
-
-        return response;
+        this.companyRepository.deleteById(id);
     }
 
     public ResultPaginationDTO handleGetCompany(@Filter Specification<Company> spec, Pageable pageable) {
@@ -123,36 +97,123 @@ public class CompanyService {
         return rs;
     }
 
-    public Company handleUpdateCompany(Company c) {
-        Optional<Company> companyOptional = this.companyRepository.findById(c.getId());
-        if (companyOptional.isPresent()) {
-            Company currentCompany = companyOptional.get();
-            currentCompany.setName(c.getName());
-            currentCompany.setDescription(c.getDescription());
-            currentCompany.setAddress(c.getAddress());
-            currentCompany.setLogo(c.getLogo());
-            currentCompany.setField(c.getField());
-            currentCompany.setWebsite(c.getWebsite());
-            currentCompany.setScale(c.getScale());
-            currentCompany.setCountry(c.getCountry());
-            currentCompany.setEstablishedYear(c.getEstablishedYear());
-            return this.companyRepository.save(currentCompany);
-        }
-        return null;
-    }
-
-    public void handleDeleteCompany(long id) {
-        Optional<Company> comOptional = this.companyRepository.findById(id);
-        if (comOptional.isPresent()) {
-            Company com = comOptional.get();
-            // fetch all user belong to this company
-            List<User> users = this.userRepository.findByCompany(com);
-            this.userRepository.deleteAll(users);
-        }
-        this.companyRepository.deleteById(id);
-    }
-
     public Optional<Company> findById(long id) {
         return this.companyRepository.findById(id);
+    }
+
+    // API FOR USER
+    @Transactional
+    public ResCreateCompanyDTO createCompanyByUser(ReqCreateCompanyDTO reqCompany) throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
+
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        if (!user.isVip() || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
+            user.setVip(false);
+            userRepository.save(user);
+            throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công ty");
+        }
+
+        if (user.getCompany() != null) {
+            throw new IdInvalidException("Bạn đã tạo một công ty. Mỗi người dùng chỉ được tạo một công ty");
+        }
+
+        Company company = new Company();
+        company.setName(reqCompany.getName());
+        company.setDescription(reqCompany.getDescription());
+        company.setAddress(reqCompany.getAddress());
+        company.setLogo(reqCompany.getLogo());
+        company.setField(reqCompany.getField());
+        company.setWebsite(reqCompany.getWebsite());
+        company.setScale(reqCompany.getScale());
+        company.setCountry(reqCompany.getCountry());
+        company.setFoundingYear(reqCompany.getFoundingYear());
+
+        Company savedCompany = companyRepository.save(company);
+        user.setCompany(savedCompany);
+
+        Role employerRole = roleRepository.findByName("EMPLOYER");
+        if (employerRole == null) {
+            throw new IdInvalidException("Role EMPLOYER không tồn tại");
+        }
+        user.setRole(employerRole);
+        userRepository.save(user);
+
+        ResCreateCompanyDTO response = new ResCreateCompanyDTO();
+        response.setId(savedCompany.getId());
+        response.setName(savedCompany.getName());
+        response.setDescription(savedCompany.getDescription());
+        response.setAddress(savedCompany.getAddress());
+        response.setLogo(savedCompany.getLogo());
+        response.setCreatedAt(savedCompany.getCreatedAt());
+        response.setField(savedCompany.getField());
+        response.setWebsite(savedCompany.getWebsite());
+        response.setScale(savedCompany.getScale());
+        response.setCountry(savedCompany.getCountry());
+        response.setFoundingYear(savedCompany.getFoundingYear());
+
+        return response;
+    }
+
+    // API FOR USER
+    @Transactional
+    public Company handleUpdateCompanyByUser(ReqUpdateCompanyDTO reqCompany) throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy thông tin đăng nhập"));
+        User currentUser = userRepository.findByEmail(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        if (currentUser.getCompany() == null) {
+            throw new IdInvalidException("Bạn chưa tạo công ty. Không thể cập nhật.");
+        }
+
+        long companyId = currentUser.getCompany().getId();
+        Company companyToUpdate = this.companyRepository.findById(companyId)
+            .orElseThrow(() -> new IdInvalidException("Công ty không tồn tại với id: " + companyId));
+
+        companyToUpdate.setName(reqCompany.getName());
+        companyToUpdate.setDescription(reqCompany.getDescription());
+        companyToUpdate.setAddress(reqCompany.getAddress());
+        companyToUpdate.setLogo(reqCompany.getLogo());
+        companyToUpdate.setField(reqCompany.getField());
+        companyToUpdate.setWebsite(reqCompany.getWebsite());
+        companyToUpdate.setScale(reqCompany.getScale());
+        companyToUpdate.setCountry(reqCompany.getCountry());
+        companyToUpdate.setFoundingYear(reqCompany.getFoundingYear());
+        
+        return this.companyRepository.save(companyToUpdate);
+    }
+
+    // API FOR USER
+    @Transactional
+    public void handleDeleteCompanyByUser() throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy thông tin đăng nhập"));
+        User currentUser = userRepository.findByEmail(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng không tồn tại");
+        }
+
+        if (currentUser.getCompany() == null) {
+            throw new IdInvalidException("Bạn không có quyền xóa công ty này, vì bạn chưa tạo công ty nào.");
+        }
+
+        long companyId = currentUser.getCompany().getId();
+        Role userRole = roleRepository.findByName("USER"); 
+        if (userRole == null) {
+            throw new IdInvalidException("Role USER không tồn tại. Không thể hoàn tác vai trò.");
+        }
+
+        currentUser.setCompany(null);
+        currentUser.setRole(userRole);
+        this.userRepository.save(currentUser);
+
+        this.companyRepository.deleteById(companyId);
     }
 }

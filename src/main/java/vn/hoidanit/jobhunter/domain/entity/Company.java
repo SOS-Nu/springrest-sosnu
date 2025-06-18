@@ -49,15 +49,13 @@ public class Company {
 
     private String updatedBy;
 
+    // THÊM CÁC TRƯỜNG MỚI
     private String field; // Lĩnh vực
-
-    private String website; // Website
-
-    private String scale; // Quy mô (ví dụ: "10-50", "50-100", ">1000")
-
+    private String website;
+    private String scale; // Quy mô
     private String country; // Quốc gia
+    private int foundingYear; // Năm thành lập
 
-    private Integer establishedYear; // Năm thành lập
 
     @OneToMany(mappedBy = "company", fetch = FetchType.LAZY)
     @JsonIgnore

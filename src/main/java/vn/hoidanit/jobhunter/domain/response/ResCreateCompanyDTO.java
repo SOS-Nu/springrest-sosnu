@@ -16,11 +16,12 @@ public class ResCreateCompanyDTO {
     private String logo;
     private Instant createdAt;
 
-    private String field; // Lĩnh vực
-    private String website; // Website
-    private String scale; // Quy mô
-    private String country; // Quốc gia
-    private Integer establishedYear; // Năm thành lập
+    // THÊM MỚI
+    private String field;
+    private String website;
+    private String scale;
+    private String country;
+    private int foundingYear;
 
   
 }
