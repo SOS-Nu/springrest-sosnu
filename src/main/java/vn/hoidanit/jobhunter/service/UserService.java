@@ -313,10 +313,12 @@ public class UserService {
 
         return new ResBulkCreateUserDTO(total, success, total - success, failedEmails);
     }
+    @Value("${hoidanit.vip.duration-minutes:1}") // Mặc định 1 phút nếu không cấu hình
+    private long vipDurationMinutes;
 
     public void activateVip(User user) {
         user.setVip(true);
-        user.setVipExpiryDate(LocalDateTime.now().plusMonths(1));
+        user.setVipExpiryDate(LocalDateTime.now().plusMinutes(vipDurationMinutes));
         user.setCvSubmissionCount(0);
         userRepository.save(user);
     }
@@ -345,7 +347,10 @@ public class UserService {
         }
     }
 
-    @Scheduled(cron = "0 0 0 1 * ?")
+    @Value("${hoidanit.vip.check-cron:0 0 0 1 * ?}") // Mặc định hàng tháng nếu không cấu hình
+    private String vipCheckCron;
+
+    @Scheduled(cron = "${hoidanit.vip.check-cron}") // Chạy vào giây 0 của mỗi phút
     public void resetCvSubmissionCount() {
         List<User> users = userRepository.findAll();
         users.forEach(user -> {
