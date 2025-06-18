@@ -77,7 +77,7 @@ public class AuthController {
         Authentication authentication = authenticationManagerBuilder.getObject()
                 .authenticate(authenticationToken);
 
-        // set thông tin người dùng đăng nhập vào context (có thể sử dụng sau này)
+        // set thông tin người dùng đăng nhập vào context
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         ResLoginDTO res = new ResLoginDTO();
@@ -88,8 +88,9 @@ public class AuthController {
                     currentUserDB.getEmail(),
                     currentUserDB.getName(),
                     currentUserDB.getRole(),
-                    currentUserDB.isVip()
-                            );
+                    currentUserDB.isVip(),
+                    currentUserDB.getCompany() != null ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(), currentUserDB.getCompany().getName()) : null
+            );
             res.setUser(userLogin);
         }
 
@@ -156,9 +157,13 @@ public class AuthController {
             // Tạo response
             ResLoginDTO res = new ResLoginDTO();
             ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin(
-                    user.getId(), user.getEmail(), user.getName(), user.getRole(),
-                    user.isVip()
-                    );
+                    user.getId(), 
+                    user.getEmail(), 
+                    user.getName(), 
+                    user.getRole(),
+                    user.isVip(),
+                    user.getCompany() != null ? new ResLoginDTO.UserLogin.CompanyUser(user.getCompany().getId(), user.getCompany().getName()) : null
+            );
             res.setUser(userLogin);
 
             // Tạo access token
@@ -202,7 +207,10 @@ public class AuthController {
             userLogin.setEmail(currentUserDB.getEmail());
             userLogin.setName(currentUserDB.getName());
             userLogin.setRole(currentUserDB.getRole());
-
+            userLogin.setVip(currentUserDB.isVip());
+            userLogin.setCompany(currentUserDB.getCompany() != null 
+                ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(), currentUserDB.getCompany().getName()) 
+                : null);
             userGetAccount.setUser(userLogin);
         }
 
@@ -235,8 +243,9 @@ public class AuthController {
                     currentUserDB.getEmail(),
                     currentUserDB.getName(),
                     currentUserDB.getRole(),
-                    currentUserDB.isVip()
-                    );
+                    currentUserDB.isVip(),
+                    currentUserDB.getCompany() != null ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(), currentUserDB.getCompany().getName()) : null
+            );
             res.setUser(userLogin);
         }
 

@@ -25,7 +25,17 @@ public class ResLoginDTO {
         private String name;
         private Role role;
         private boolean isVip;
+        private CompanyUser company;
+
+        @Getter
+        @Setter
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class CompanyUser {
+            private long id;
+            private String name;
         }
+    }
 
     @Getter
     @Setter
@@ -44,5 +54,4 @@ public class ResLoginDTO {
         private String email;
         private String name;
     }
-
 }
