@@ -1,7 +1,12 @@
 package vn.hoidanit.jobhunter.domain.request;
 
 import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.Setter;
 
+
+@Getter
+@Setter
 public class ReqCreateCompanyDTO {
 
     @NotBlank(message = "Tên công ty không được để trống")
@@ -13,36 +18,15 @@ public class ReqCreateCompanyDTO {
 
     private String logo;
 
-    // Getters and Setters
-    public String getName() {
-        return name;
-    }
+    
+    private String field; // Lĩnh vực
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    private String website; // Website
 
-    public String getDescription() {
-        return description;
-    }
+    private String scale; // Quy mô
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+    private String country; // Quốc gia
 
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
-    }
-
-    public String getLogo() {
-        return logo;
-    }
-
-    public void setLogo(String logo) {
-        this.logo = logo;
-    }
+    private Integer establishedYear; // Năm thành lập
+ 
 }

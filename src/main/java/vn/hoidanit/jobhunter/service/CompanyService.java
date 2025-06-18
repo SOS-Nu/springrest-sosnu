@@ -31,7 +31,7 @@ public class CompanyService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
 
-    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository,RoleRepository roleRepository) {
+    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository, RoleRepository roleRepository) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -70,6 +70,11 @@ public class CompanyService {
         company.setDescription(reqCompany.getDescription());
         company.setAddress(reqCompany.getAddress());
         company.setLogo(reqCompany.getLogo());
+        company.setField(reqCompany.getField());
+        company.setWebsite(reqCompany.getWebsite());
+        company.setScale(reqCompany.getScale());
+        company.setCountry(reqCompany.getCountry());
+        company.setEstablishedYear(reqCompany.getEstablishedYear());
 
         // Lưu công ty
         Company savedCompany = companyRepository.save(company);
@@ -93,6 +98,11 @@ public class CompanyService {
         response.setDescription(savedCompany.getDescription());
         response.setAddress(savedCompany.getAddress());
         response.setLogo(savedCompany.getLogo());
+        response.setField(savedCompany.getField());
+        response.setWebsite(savedCompany.getWebsite());
+        response.setScale(savedCompany.getScale());
+        response.setCountry(savedCompany.getCountry());
+        response.setEstablishedYear(savedCompany.getEstablishedYear());
         response.setCreatedAt(savedCompany.getCreatedAt());
 
         return response;
@@ -105,7 +115,6 @@ public class CompanyService {
 
         mt.setPage(pageable.getPageNumber() + 1);
         mt.setPageSize(pageable.getPageSize());
-
         mt.setPages(pCompany.getTotalPages());
         mt.setTotal(pCompany.getTotalElements());
 
@@ -118,10 +127,15 @@ public class CompanyService {
         Optional<Company> companyOptional = this.companyRepository.findById(c.getId());
         if (companyOptional.isPresent()) {
             Company currentCompany = companyOptional.get();
-            currentCompany.setLogo(c.getLogo());
             currentCompany.setName(c.getName());
             currentCompany.setDescription(c.getDescription());
             currentCompany.setAddress(c.getAddress());
+            currentCompany.setLogo(c.getLogo());
+            currentCompany.setField(c.getField());
+            currentCompany.setWebsite(c.getWebsite());
+            currentCompany.setScale(c.getScale());
+            currentCompany.setCountry(c.getCountry());
+            currentCompany.setEstablishedYear(c.getEstablishedYear());
             return this.companyRepository.save(currentCompany);
         }
         return null;
@@ -135,7 +149,6 @@ public class CompanyService {
             List<User> users = this.userRepository.findByCompany(com);
             this.userRepository.deleteAll(users);
         }
-
         this.companyRepository.deleteById(id);
     }
 
