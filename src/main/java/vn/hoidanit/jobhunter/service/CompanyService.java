@@ -132,6 +132,8 @@ public class CompanyService {
         company.setScale(reqCompany.getScale());
         company.setCountry(reqCompany.getCountry());
         company.setFoundingYear(reqCompany.getFoundingYear());
+        company.setLocation(reqCompany.getLocation());
+
 
         Company savedCompany = companyRepository.save(company);
         user.setCompany(savedCompany);
@@ -155,6 +157,7 @@ public class CompanyService {
         response.setScale(savedCompany.getScale());
         response.setCountry(savedCompany.getCountry());
         response.setFoundingYear(savedCompany.getFoundingYear());
+        response.setLocation(savedCompany.getLocation());
 
         return response;
     }
@@ -186,6 +189,8 @@ public class CompanyService {
         companyToUpdate.setScale(reqCompany.getScale());
         companyToUpdate.setCountry(reqCompany.getCountry());
         companyToUpdate.setFoundingYear(reqCompany.getFoundingYear());
+        companyToUpdate.setLocation(reqCompany.getLocation());
+
         
         return this.companyRepository.save(companyToUpdate);
     }

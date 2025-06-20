@@ -25,5 +25,6 @@ public class ReqCreateCompanyDTO {
     private String scale;
     private String country;
     private int foundingYear;
+    private String location;
  
 }

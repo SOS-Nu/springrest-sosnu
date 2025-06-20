@@ -55,6 +55,7 @@ public class Company {
     private String scale; // Quy mô
     private String country; // Quốc gia
     private int foundingYear; // Năm thành lập
+    private String location;
 
 
     @OneToMany(mappedBy = "company", fetch = FetchType.LAZY)

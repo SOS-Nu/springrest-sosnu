@@ -22,6 +22,7 @@ public class ResCreateCompanyDTO {
     private String scale;
     private String country;
     private int foundingYear;
+    private String location;
 
   
 }
