@@ -154,27 +154,39 @@ public class ResumeService {
         this.resumeRepository.deleteById(id);
     }
 
-     public ResFetchResumeDTO getResume(Resume resume) {
-        ResFetchResumeDTO res = new ResFetchResumeDTO();
-        res.setId(resume.getId());
-        res.setEmail(resume.getEmail());
-        res.setUrl(resume.getUrl());
-        res.setStatus(resume.getStatus());
-        res.setCreatedAt(resume.getCreatedAt());
-        res.setCreatedBy(resume.getCreatedBy());
-        res.setUpdatedAt(resume.getUpdatedAt());
-        res.setUpdatedBy(resume.getUpdatedBy());
-        res.setScore(resume.getScore()); // Thêm điểm
+    // Đặt tại: vn.hoidanit.jobhunter.service.ResumeService
+public ResFetchResumeDTO getResume(Resume resume) {
+    ResFetchResumeDTO res = new ResFetchResumeDTO();
+    res.setId(resume.getId());
+    // Bỏ dòng res.setEmail(resume.getEmail()); ở đây
 
-        if (resume.getJob() != null) {
-            res.setCompanyName(resume.getJob().getCompany().getName());
-        }
+    res.setUrl(resume.getUrl());
+    res.setStatus(resume.getStatus());
+    res.setCreatedAt(resume.getCreatedAt());
+    res.setCreatedBy(resume.getCreatedBy());
+    res.setUpdatedAt(resume.getUpdatedAt());
+    res.setUpdatedBy(resume.getUpdatedBy());
+    res.setScore(resume.getScore());
 
-        res.setUser(new ResFetchResumeDTO.UserResume(resume.getUser().getId(), resume.getUser().getName()));
-        res.setJob(new ResFetchResumeDTO.JobResume(resume.getJob().getId(), resume.getJob().getName()));
-
-        return res;
+    if (resume.getJob() != null) {
+        res.setCompanyName(resume.getJob().getCompany().getName());
     }
+
+    User resumeOwner = resume.getUser(); // Lấy thông tin người đã nộp CV
+
+    // LOGIC MỚI: Chỉ hiện email nếu người dùng đó là public
+    if (resumeOwner != null && resumeOwner.isPublic()) {
+        res.setEmail(resume.getEmail());
+    } else {
+        // Nếu isPublic là false (hoặc user không tồn tại), không trả về email
+        res.setEmail(null); 
+    }
+
+    res.setUser(new ResFetchResumeDTO.UserResume(resumeOwner.getId(), resumeOwner.getName()));
+    res.setJob(new ResFetchResumeDTO.JobResume(resume.getJob().getId(), resume.getJob().getName()));
+
+    return res;
+}
 
     public ResultPaginationDTO fetchAllResume(Specification<Resume> spec, Pageable pageable) {
         Page<Resume> pageUser = this.resumeRepository.findAll(spec, pageable);
