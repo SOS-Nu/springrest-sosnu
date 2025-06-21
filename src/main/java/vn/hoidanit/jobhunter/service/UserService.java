@@ -434,19 +434,25 @@ public class UserService {
         }
         
         @Transactional
-        public ResUserDetailDTO updateIsPublic(long id, boolean isPublic) throws IdInvalidException {
-            String currentUserEmail = SecurityUtil.getCurrentUserLogin()
-                    .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng hiện tại"));
-    
-            User user = this.userRepository.findById(id)
-                    .orElseThrow(() -> new IdInvalidException("User với id = " + id + " không tồn tại"));
-    
-            if (!user.getEmail().equals(currentUserEmail)) {
-                throw new IdInvalidException("Bạn không có quyền cập nhật trạng thái isPublic của người dùng này");
+        public void updateUserIsPublic(boolean isPublic) throws IdInvalidException {
+            // Lấy email của người dùng đang đăng nhập từ security context
+            Optional<String> currentUserLoginOptional = SecurityUtil.getCurrentUserLogin();
+            if (currentUserLoginOptional.isEmpty()) {
+                throw new IdInvalidException("Không tìm thấy thông tin người dùng đang đăng nhập.");
             }
-    
-            user.setPublic(isPublic);
-            user = this.userRepository.save(user);
-            return ResUserDetailDTO.convertToDTO(user);
+        
+            String email = currentUserLoginOptional.get();
+        
+            // Tìm user trong database bằng email
+            User currentUser = this.userRepository.findByEmail(email);
+            if (currentUser == null) {
+                throw new IdInvalidException("Người dùng với email " + email + " không tồn tại.");
+            }
+        
+            // Cập nhật trạng thái isPublic
+            currentUser.setPublic(isPublic);
+        
+            // Lưu lại vào database
+            this.userRepository.save(currentUser);
         }
 }

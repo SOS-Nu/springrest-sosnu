@@ -63,7 +63,8 @@ public class User {
     private LocalDateTime vipExpiryDate;
     private int cvSubmissionCount;
 
-    @Column(columnDefinition = "BOOLEAN DEFAULT TRUE")
+    // TÍCH HỢP TRƯỜNG MỚI
+    @Column(columnDefinition = "boolean default true")
     private boolean isPublic = true;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

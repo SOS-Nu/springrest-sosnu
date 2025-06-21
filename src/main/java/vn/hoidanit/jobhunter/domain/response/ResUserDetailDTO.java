@@ -14,31 +14,35 @@ public class ResUserDetailDTO {
 
     private long id;
     private String name;
-    private String email;
+    private String email; // Sẽ được gán giá trị có điều kiện
     private int age;
     private GenderEnum gender;
-    private String address;
+    private String address; // Sẽ được gán giá trị có điều kiện
     private String mainResume;
-    private boolean isPublic;
+    private boolean isPublic; // Thêm trường này vào DTO
 
     private ResOnlineResumeDTO.ResGetOnlineResumeDTO onlineResume;
     private List<ResWorkExperienceDTO.WorkExperienceResponse> workExperiences;
 
     public static ResUserDetailDTO convertToDTO(User user) {
         ResUserDetailDTO dto = new ResUserDetailDTO();
-        
+
         // Map thông tin cơ bản của User
         dto.setId(user.getId());
         dto.setName(user.getName());
         dto.setAge(user.getAge());
         dto.setGender(user.getGender());
         dto.setMainResume(user.getMainResume());
-        dto.setPublic(user.isPublic());
+        dto.setPublic(user.isPublic()); // Gán giá trị isPublic
 
-        // Chỉ hiển thị email và address nếu isPublic là true
+        // LOGIC CÓ ĐIỀU KIỆN: Kiểm tra isPublic trước khi gán email và address
         if (user.isPublic()) {
             dto.setEmail(user.getEmail());
             dto.setAddress(user.getAddress());
+        } else {
+            // Nếu không public, có thể gán null hoặc một giá trị ẩn
+            dto.setEmail(null); 
+            dto.setAddress(null);
         }
 
         // Map thông tin OnlineResume nếu có
@@ -49,7 +53,7 @@ public class ResUserDetailDTO {
         // Map danh sách WorkExperience nếu có
         if (user.getWorkExperiences() != null && !user.getWorkExperiences().isEmpty()) {
             dto.setWorkExperiences(
-                ResWorkExperienceDTO.convertToListResponse(user.getWorkExperiences())
+                    ResWorkExperienceDTO.convertToListResponse(user.getWorkExperiences())
             );
         }
 
