@@ -339,20 +339,24 @@ public class JobService {
     }
 
     public ResultPaginationDTO fetchAll(Specification<Job> spec, Pageable pageable) {
-        Page<Job> pageUser = this.jobRepository.findAll(spec, pageable);
+        // Tạo một Specification để luôn lọc các công việc có active = true
+        Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
+
+        // Kết hợp Specification mặc định (active=true) với Specification từ request của người dùng
+        Specification<Job> finalSpec = spec.and(activeJobsSpec);
+
+        Page<Job> pageJob = this.jobRepository.findAll(finalSpec, pageable);
 
         ResultPaginationDTO rs = new ResultPaginationDTO();
         ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
 
         mt.setPage(pageable.getPageNumber() + 1);
         mt.setPageSize(pageable.getPageSize());
-
-        mt.setPages(pageUser.getTotalPages());
-        mt.setTotal(pageUser.getTotalElements());
+        mt.setPages(pageJob.getTotalPages());
+        mt.setTotal(pageJob.getTotalElements());
 
         rs.setMeta(mt);
-
-        rs.setResult(pageUser.getContent());
+        rs.setResult(pageJob.getContent());
 
         return rs;
     }
@@ -420,11 +424,15 @@ public class JobService {
     }
 
     public ResultPaginationDTO fetchJobsByCompany(long companyId, Specification<Job> spec, Pageable pageable) {
+        // Specification để lọc theo companyId
         Specification<Job> companySpec = (root, query, criteriaBuilder) -> criteriaBuilder
                 .equal(root.get("company").get("id"), companyId);
 
-        // Kết hợp spec từ người dùng với spec của company
-        Specification<Job> finalSpec = companySpec.and(spec);
+        // Specification để luôn lọc các công việc có active = true
+        Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
+
+        // Kết hợp cả 3 điều kiện: theo công ty, đang active, và các điều kiện lọc khác từ người dùng
+        Specification<Job> finalSpec = companySpec.and(activeJobsSpec).and(spec);
 
         Page<Job> pageJob = jobRepository.findAll(finalSpec, pageable);
         ResultPaginationDTO rs = new ResultPaginationDTO();

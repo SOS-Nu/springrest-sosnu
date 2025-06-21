@@ -5,9 +5,13 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import vn.hoidanit.jobhunter.domain.entity.Resume;
+import vn.hoidanit.jobhunter.util.constant.ResumeStateEnum;
 
 @Repository
 public interface ResumeRepository extends JpaRepository<Resume, Long>,
-                JpaSpecificationExecutor<Resume> {
+        JpaSpecificationExecutor<Resume> {
+
+                    
+    long countByStatus(ResumeStateEnum status);
 
 }
