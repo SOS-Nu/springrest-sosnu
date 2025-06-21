@@ -6,6 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.turkraft.springfilter.boot.Filter;
 
 import jakarta.validation.Valid;
+import vn.hoidanit.jobhunter.domain.entity.UpdateIsPublicDTO;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.entity.UserBulkCreateDTO;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
@@ -149,5 +150,13 @@ public class UserController {
         return ResponseEntity.ok(this.userService.fetchAllUserDetails(spec, pageable));
     }
 
+    
+    @PutMapping("/users/is-public")
+    @ApiMessage("Cập nhật trạng thái isPublic của người dùng")
+    public ResponseEntity<ResUserDetailDTO> updateIsPublic(@RequestBody UpdateIsPublicDTO updateIsPublicDTO)
+            throws IdInvalidException {
+        ResUserDetailDTO updatedUser = this.userService.updateIsPublic(updateIsPublicDTO.getId(), updateIsPublicDTO.isPublic());
+        return ResponseEntity.ok(updatedUser);
+    }
 
 }

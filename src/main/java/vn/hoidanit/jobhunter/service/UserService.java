@@ -412,24 +412,41 @@ public class UserService {
         public ResultPaginationDTO fetchAllUserDetails(Specification<User> spec, Pageable pageable) {
             // Cập nhật lời gọi repository để bao gồm cả specification
             Page<User> pageUser = this.userRepository.findAll(spec, pageable);
-    
+
             ResultPaginationDTO rs = new ResultPaginationDTO();
             ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
-    
+
             // Thiết lập thông tin meta cho phân trang
             mt.setPage(pageable.getPageNumber() + 1);
             mt.setPageSize(pageable.getPageSize());
             mt.setPages(pageUser.getTotalPages());
             mt.setTotal(pageUser.getTotalElements());
             rs.setMeta(mt);
-    
+
             // Chuyển đổi danh sách User sang danh sách ResUserDetailDTO
             List<ResUserDetailDTO> listUserDetails = pageUser.getContent().stream()
                     .map(ResUserDetailDTO::convertToDTO)
                     .collect(Collectors.toList());
-    
+
             rs.setResult(listUserDetails);
-    
+
             return rs;
+        }
+        
+        @Transactional
+        public ResUserDetailDTO updateIsPublic(long id, boolean isPublic) throws IdInvalidException {
+            String currentUserEmail = SecurityUtil.getCurrentUserLogin()
+                    .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng hiện tại"));
+    
+            User user = this.userRepository.findById(id)
+                    .orElseThrow(() -> new IdInvalidException("User với id = " + id + " không tồn tại"));
+    
+            if (!user.getEmail().equals(currentUserEmail)) {
+                throw new IdInvalidException("Bạn không có quyền cập nhật trạng thái isPublic của người dùng này");
+            }
+    
+            user.setPublic(isPublic);
+            user = this.userRepository.save(user);
+            return ResUserDetailDTO.convertToDTO(user);
         }
 }

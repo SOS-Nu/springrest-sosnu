@@ -19,7 +19,7 @@ public class ResUserDetailDTO {
     private GenderEnum gender;
     private String address;
     private String mainResume;
-
+    private boolean isPublic;
 
     private ResOnlineResumeDTO.ResGetOnlineResumeDTO onlineResume;
     private List<ResWorkExperienceDTO.WorkExperienceResponse> workExperiences;
@@ -30,11 +30,16 @@ public class ResUserDetailDTO {
         // Map thông tin cơ bản của User
         dto.setId(user.getId());
         dto.setName(user.getName());
-        dto.setEmail(user.getEmail());
         dto.setAge(user.getAge());
         dto.setGender(user.getGender());
-        dto.setAddress(user.getAddress());
         dto.setMainResume(user.getMainResume());
+        dto.setPublic(user.isPublic());
+
+        // Chỉ hiển thị email và address nếu isPublic là true
+        if (user.isPublic()) {
+            dto.setEmail(user.getEmail());
+            dto.setAddress(user.getAddress());
+        }
 
         // Map thông tin OnlineResume nếu có
         if (user.getOnlineResume() != null) {

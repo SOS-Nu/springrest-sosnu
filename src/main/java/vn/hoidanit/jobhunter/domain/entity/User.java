@@ -42,11 +42,9 @@ public class User {
     @NotBlank(message = "email không được để trống")
     private String email;
 
-    // @NotBlank(message = "password không được để trống")
     private String password;
 
     private int age;
-    // Thêm trường main_resume
     private String mainResume;
 
     @Enumerated(EnumType.STRING)
@@ -65,6 +63,9 @@ public class User {
     private LocalDateTime vipExpiryDate;
     private int cvSubmissionCount;
 
+    @Column(columnDefinition = "BOOLEAN DEFAULT TRUE")
+    private boolean isPublic = true;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<PaymentHistory> paymentHistories;
@@ -81,10 +82,6 @@ public class User {
     @JoinColumn(name = "role_id")
     private Role role;
 
-    // quan hệ với OnlineResume và WorkExperience
-    //onetoone giữa user và online resume
-    //onetoone giữa user va workexperience
-    // Thêm mối quan hệ OneToOne với OnlineResume
     @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JoinColumn(name = "online_resume_id", referencedColumnName = "id")
     private OnlineResume onlineResume;
@@ -92,13 +89,11 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkExperience> workExperiences;
 
-
     @PrePersist
     public void handleBeforeCreate() {
         this.createdBy = SecurityUtil.getCurrentUserLogin().isPresent() == true
                 ? SecurityUtil.getCurrentUserLogin().get()
                 : "";
-
         this.createdAt = Instant.now();
     }
 
@@ -110,7 +105,6 @@ public class User {
         this.updatedBy = SecurityUtil.getCurrentUserLogin().isPresent() == true
                 ? SecurityUtil.getCurrentUserLogin().get()
                 : "";
-
         this.updatedAt = Instant.now();
     }
 }
