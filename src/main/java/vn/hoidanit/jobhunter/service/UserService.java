@@ -350,7 +350,7 @@ public class UserService {
     @Value("${hoidanit.vip.check-cron:0 0 0 1 * ?}") // Mặc định hàng tháng nếu không cấu hình
     private String vipCheckCron;
 
-    @Scheduled(cron = "${hoidanit.vip.check-cron}") // Chạy vào giây 0 của mỗi phút
+    @Scheduled(cron = "${hoidanit.vip.check-cron}") 
     public void resetCvSubmissionCount() {
         List<User> users = userRepository.findAll();
         users.forEach(user -> {

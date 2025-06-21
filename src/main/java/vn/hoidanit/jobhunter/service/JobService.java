@@ -7,9 +7,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -442,39 +444,65 @@ public class JobService {
       /**
      * PHƯƠNG THỨC MỚI: Chuyển đổi Job Entity sang ResFetchJobDTO.
      */
-    public ResFetchJobDTO convertToResFetchJobDTO(Job job) {
-        ResFetchJobDTO dto = new ResFetchJobDTO();
-        dto.setId(job.getId());
-        dto.setName(job.getName());
-        dto.setLocation(job.getLocation());
-        dto.setSalary(job.getSalary());
-        dto.setQuantity(job.getQuantity());
-        dto.setLevel(job.getLevel() != null ? job.getLevel().name() : null);
-        dto.setDescription(job.getDescription());
-        dto.setStartDate(job.getStartDate());
-        dto.setEndDate(job.getEndDate());
-        dto.setActive(job.isActive());
-        dto.setCreatedAt(job.getCreatedAt());
-        dto.setUpdatedAt(job.getUpdatedAt());
-        dto.setCreatedBy(job.getCreatedBy());
-        dto.setUpdatedBy(job.getUpdatedBy());
+      public ResFetchJobDTO convertToResFetchJobDTO(Job job) {
+          ResFetchJobDTO dto = new ResFetchJobDTO();
+          dto.setId(job.getId());
+          dto.setName(job.getName());
+          dto.setLocation(job.getLocation());
+          dto.setSalary(job.getSalary());
+          dto.setQuantity(job.getQuantity());
+          dto.setLevel(job.getLevel() != null ? job.getLevel().name() : null);
+          dto.setDescription(job.getDescription());
+          dto.setStartDate(job.getStartDate());
+          dto.setEndDate(job.getEndDate());
+          dto.setActive(job.isActive());
+          dto.setCreatedAt(job.getCreatedAt());
+          dto.setUpdatedAt(job.getUpdatedAt());
+          dto.setCreatedBy(job.getCreatedBy());
+          dto.setUpdatedBy(job.getUpdatedBy());
 
-        if (job.getCompany() != null) {
-            ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
-            companyInfo.setId(job.getCompany().getId());
-            companyInfo.setName(job.getCompany().getName());
-            dto.setCompany(companyInfo);
+          if (job.getCompany() != null) {
+              ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
+              companyInfo.setId(job.getCompany().getId());
+              companyInfo.setName(job.getCompany().getName());
+              dto.setCompany(companyInfo);
+          }
+
+          if (job.getSkills() != null) {
+              dto.setSkills(job.getSkills().stream().map(skill -> {
+                  ResFetchJobDTO.SkillInfo skillInfo = new ResFetchJobDTO.SkillInfo();
+                  skillInfo.setId(skill.getId());
+                  skillInfo.setName(skill.getName());
+                  return skillInfo;
+              }).collect(Collectors.toList()));
+          }
+
+          return dto;
+      }
+
+
+    @Value("${hoidanit.endDateJob.check-cron:0 0 0 * * ?}") // Mặc định hangf ngayf 
+    private String dateJobCheck;
+
+
+    @Scheduled(cron = "${hoidanit.endDateJob.check-cron}") // Cron expression: chạy mỗi giờ
+    @Transactional
+    public void deactivateExpiredJobs() {
+        Instant now = Instant.now();
+        System.out.println(">>> Bắt đầu tác vụ lập lịch: Vô hiệu hóa các công việc hết hạn lúc " + now);
+
+        List<Job> expiredJobs = this.jobRepository.findByActiveTrueAndEndDateBefore(now);
+
+        if (expiredJobs != null && !expiredJobs.isEmpty()) {
+            System.out.println(">>> Tìm thấy " + expiredJobs.size() + " công việc hết hạn cần cập nhật.");
+            for (Job job : expiredJobs) {
+                job.setActive(false);
+            }
+            this.jobRepository.saveAll(expiredJobs); // Lưu tất cả thay đổi trong một lần
+        } else {
+            System.out.println(">>> Không có công việc nào hết hạn.");
         }
-
-        if (job.getSkills() != null) {
-            dto.setSkills(job.getSkills().stream().map(skill -> {
-                ResFetchJobDTO.SkillInfo skillInfo = new ResFetchJobDTO.SkillInfo();
-                skillInfo.setId(skill.getId());
-                skillInfo.setName(skill.getName());
-                return skillInfo;
-            }).collect(Collectors.toList()));
-        }
-
-        return dto;
+        System.out.println(">>> Kết thúc tác vụ lập lịch.");
     }
+    
 }

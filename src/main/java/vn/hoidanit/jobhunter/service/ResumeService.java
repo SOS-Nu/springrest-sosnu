@@ -28,6 +28,7 @@ import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.ResumeRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
+import vn.hoidanit.jobhunter.util.constant.ResumeStateEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
@@ -142,8 +143,31 @@ public class ResumeService {
         return res;
     }
 
+   @Transactional // Sử dụng Transactional để đảm bảo tính toàn vẹn dữ liệu
     public ResUpdateResumeDTO update(Resume resume) {
+        // Lấy thông tin job liên quan đến resume này
+        Job jobToUpdate = resume.getJob();
+        if (jobToUpdate != null) {
+            // Kiểm tra nếu trạng thái của resume được cập nhật là "APPROVED"
+            if (resume.getStatus() == ResumeStateEnum.APPROVED) {
+                int currentQuantity = jobToUpdate.getQuantity();
+                if (currentQuantity > 0) {
+                    // Giảm quantity đi 1
+                    jobToUpdate.setQuantity(currentQuantity - 1);
+                    // Nếu quantity về 0, set active = false
+                    if (jobToUpdate.getQuantity() == 0) {
+                        jobToUpdate.setActive(false);
+                    }
+                    // Lưu lại thay đổi của job
+                    this.jobRepository.save(jobToUpdate);
+                }
+            }
+        }
+
+        // Lưu lại resume
         resume = this.resumeRepository.save(resume);
+
+        // Tạo response DTO
         ResUpdateResumeDTO res = new ResUpdateResumeDTO();
         res.setUpdatedAt(resume.getUpdatedAt());
         res.setUpdatedBy(resume.getUpdatedBy());
