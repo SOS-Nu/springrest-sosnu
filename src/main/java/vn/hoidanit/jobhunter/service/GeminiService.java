@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -244,9 +245,6 @@ public class GeminiService {
         }
     }
 
-     /**
-     * PHƯƠNG THỨC MỚI: Tìm các công việc phù hợp cho ứng viên.
-     */
     public ResFindJobsDTO findJobsForCandidate(
         String skillsDescription, byte[] cvFileBytes, String cvFileName) throws IdInvalidException {
         
@@ -256,20 +254,26 @@ public class GeminiService {
         final int PAGE_SIZE = 10;
         final int TARGET_JOBS = 10;
 
+        // TẠO SPECIFICATION ĐỂ LỌC CÁC JOB CÓ 'active = true'
+        Specification<Job> spec = (root, query, criteriaBuilder) ->
+                criteriaBuilder.equal(root.get("active"), true);
+
         while (suitableJobs.size() < TARGET_JOBS) {
             Pageable pageable = PageRequest.of(currentPage, PAGE_SIZE);
-            Page<Job> paginatedJobs = jobRepository.findAll(pageable);
             
-            if (paginatedJobs.getContent().isEmpty()) {
-                break; // Hết công việc để kiểm tra
-            }
+            // SỬ DỤNG SPECIFICATION KHI TRUY VẤN DATABASE
+            Page<Job> paginatedJobs = jobRepository.findAll(spec, pageable);
             
-            // SỬA LỖI TẠI ĐÂY
+            // Luôn cập nhật meta cho trang hiện tại để đảm bảo không bị null
             lastMeta = new ResultPaginationDTO.Meta();
             lastMeta.setPage(paginatedJobs.getNumber() + 1);
             lastMeta.setPageSize(paginatedJobs.getSize());
             lastMeta.setPages(paginatedJobs.getTotalPages());
             lastMeta.setTotal(paginatedJobs.getTotalElements());
+
+            if (paginatedJobs.getContent().isEmpty()) {
+                break; // Hết công việc để kiểm tra
+            }
 
             List<Job> currentJobs = paginatedJobs.getContent();
             Map<Long, Job> jobMap = currentJobs.stream()
