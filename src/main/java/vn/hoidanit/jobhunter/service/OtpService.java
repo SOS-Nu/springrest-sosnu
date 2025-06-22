@@ -37,6 +37,19 @@ public class OtpService {
         otpRepository.save(otp);
     }
 
+    public void sendOtpEmail(String email, String otpCode, String subject) throws IdInvalidException {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setTo(email);
+            helper.setSubject(subject); // Dùng tiêu đề được truyền vào
+            helper.setText("Mã OTP của bạn là: " + otpCode + ". Mã này có hiệu lực trong 5 phút.", true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            throw new IdInvalidException("Lỗi gửi email OTP: " + e.getMessage());
+        }
+    }
+
     public void sendOtpEmail(String email, String otpCode) throws IdInvalidException {
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();

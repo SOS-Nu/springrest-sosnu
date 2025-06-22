@@ -32,6 +32,7 @@ import vn.hoidanit.jobhunter.domain.request.ReqChangePasswordDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqGoogleLoginDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqLoginDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqSendOtpDTO;
+import vn.hoidanit.jobhunter.domain.request.ReqUserRegisterDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqVerifyOtpChangePasswordDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResLoginDTO;
@@ -299,23 +300,55 @@ public class AuthController {
                 .body(null);
     }
 
-    @PostMapping("/auth/register")
-    @ApiMessage("Register a new user")
-    public ResponseEntity<ResCreateUserDTO> register(@Valid @RequestBody User postManUser) throws IdInvalidException {
-        // Kiểm tra password không trống
-        if (postManUser.getPassword() == null || postManUser.getPassword().trim().isEmpty()) {
-            throw new IdInvalidException("Password không được để trống");
-        }
-        boolean isEmailExist = this.userService.isEmailExist(postManUser.getEmail());
-        if (isEmailExist) {
-            throw new IdInvalidException(
-                    "Email " + postManUser.getEmail() + "đã tồn tại, vui lòng sử dụng email khác.");
+     /**
+     * Endpoint mới: Gửi OTP để xác thực email đăng ký.
+     */
+    @PostMapping("/auth/register/send-otp")
+    @ApiMessage("Gửi mã OTP để đăng ký tài khoản")
+    public ResponseEntity<Void> sendRegistrationOtp(@Valid @RequestBody ReqSendOtpDTO sendOtpDTO) throws IdInvalidException {
+        // Kiểm tra xem email đã được đăng ký chưa
+        if (userService.isEmailExist(sendOtpDTO.getEmail())) {
+            throw new IdInvalidException("Email " + sendOtpDTO.getEmail() + " đã tồn tại, vui lòng sử dụng email khác.");
         }
 
-        String hashPassword = this.passwordEncoder.encode(postManUser.getPassword());
-        postManUser.setPassword(hashPassword);
-        User ericUser = this.userService.handleCreateUser(postManUser);
-        return ResponseEntity.status(HttpStatus.CREATED).body(this.userService.convertToResCreateUserDTO(ericUser));
+        // Tạo, lưu và gửi OTP
+        String otpCode = otpService.generateOtp();
+        otpService.saveOtp(sendOtpDTO.getEmail(), otpCode);
+        // Gửi email với tiêu đề rõ ràng
+        otpService.sendOtpEmail(sendOtpDTO.getEmail(), otpCode, "Mã OTP Đăng Ký Tài Khoản JobHunter");
+        
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Cập nhật API /register để xác thực OTP và không nhận 'role'
+     */
+    @PostMapping("/auth/register")
+    @ApiMessage("Register a new user")
+    public ResponseEntity<ResCreateUserDTO> register(@Valid @RequestBody ReqUserRegisterDTO registerDTO) throws IdInvalidException {
+        // 1. Xác thực OTP có hợp lệ không
+        otpService.validateOtp(registerDTO.getEmail(), registerDTO.getOtpCode());
+
+        // 2. Kiểm tra lại sự tồn tại của email một lần nữa (đề phòng race condition)
+        if (this.userService.isEmailExist(registerDTO.getEmail())) {
+            throw new IdInvalidException("Email " + registerDTO.getEmail() + " đã tồn tại, vui lòng sử dụng email khác.");
+        }
+
+        // 3. Chuyển đổi DTO thành User entity
+        // Vì ReqUserRegisterDTO không có trường 'role', user.getRole() sẽ là null
+        User user = new User();
+        user.setName(registerDTO.getName());
+        user.setEmail(registerDTO.getEmail());
+        user.setPassword(this.passwordEncoder.encode(registerDTO.getPassword()));
+        user.setAge(registerDTO.getAge());
+        user.setGender(registerDTO.getGender());
+        user.setAddress(registerDTO.getAddress());
+        
+        // 4. Gọi service để tạo user. 
+        // Phương thức handleCreateUser hiện tại sẽ bỏ qua việc set role nếu nó là null
+        User newUser = this.userService.handleCreateUser(user);
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body(this.userService.convertToResCreateUserDTO(newUser));
     }
 
     @PostMapping("/auth/change-password")
