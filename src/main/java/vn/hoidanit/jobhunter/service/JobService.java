@@ -338,12 +338,26 @@ public class JobService {
         jobRepository.deleteById(id);
     }
 
+    // ========== CHANGE START: Modified fetchAll method ==========
     public ResultPaginationDTO fetchAll(Specification<Job> spec, Pageable pageable) {
-        // Tạo một Specification để luôn lọc các công việc có active = true
-        Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
+        // Lấy thông tin người dùng hiện tại
+        Optional<String> currentUserLogin = SecurityUtil.getCurrentUserLogin();
+        boolean isSuperAdmin = false;
 
-        // Kết hợp Specification mặc định (active=true) với Specification từ request của người dùng
-        Specification<Job> finalSpec = spec.and(activeJobsSpec);
+        if (currentUserLogin.isPresent()) {
+            User currentUser = this.userRepository.findByEmail(currentUserLogin.get());
+            if (currentUser != null && currentUser.getRole() != null &&
+                "SUPER_ADMIN".equals(currentUser.getRole().getName())) {
+                isSuperAdmin = true;
+            }
+        }
+
+        Specification<Job> finalSpec = spec;
+        // Nếu không phải SUPER_ADMIN, thì chỉ lấy các job active = true
+        if (!isSuperAdmin) {
+            Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
+            finalSpec = spec.and(activeJobsSpec);
+        }
 
         Page<Job> pageJob = this.jobRepository.findAll(finalSpec, pageable);
 
@@ -360,6 +374,8 @@ public class JobService {
 
         return rs;
     }
+    // ========== CHANGE END ==========
+
 
     @Transactional
     public ResBulkCreateJobDTO handleBulkCreateJobs(List<JobBulkCreateDTO> jobDTOs) {
@@ -422,17 +438,39 @@ public class JobService {
     public boolean isCompanyExist(long companyId) {
         return companyRepository.existsById(companyId);
     }
-
+    
+    // ========== CHANGE START: Modified fetchJobsByCompany method ==========
     public ResultPaginationDTO fetchJobsByCompany(long companyId, Specification<Job> spec, Pageable pageable) {
+        // Lấy thông tin người dùng hiện tại
+        Optional<String> currentUserLogin = SecurityUtil.getCurrentUserLogin();
+        boolean canViewAll = false;
+
+        if (currentUserLogin.isPresent()) {
+            User currentUser = this.userRepository.findByEmail(currentUserLogin.get());
+            if (currentUser != null) {
+                // Điều kiện 1: Người dùng là SUPER_ADMIN
+                if (currentUser.getRole() != null && "SUPER_ADMIN".equals(currentUser.getRole().getName())) {
+                    canViewAll = true;
+                }
+                // Điều kiện 2: Người dùng thuộc công ty đang được truy vấn
+                else if (currentUser.getCompany() != null && currentUser.getCompany().getId() == companyId) {
+                    canViewAll = true;
+                }
+            }
+        }
+
         // Specification để lọc theo companyId
         Specification<Job> companySpec = (root, query, criteriaBuilder) -> criteriaBuilder
                 .equal(root.get("company").get("id"), companyId);
 
-        // Specification để luôn lọc các công việc có active = true
-        Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
+        Specification<Job> finalSpec = spec.and(companySpec);
 
-        // Kết hợp cả 3 điều kiện: theo công ty, đang active, và các điều kiện lọc khác từ người dùng
-        Specification<Job> finalSpec = companySpec.and(activeJobsSpec).and(spec);
+        // Nếu không có quyền xem tất cả (không phải admin hoặc không thuộc công ty đó),
+        // thì thêm điều kiện lọc active = true
+        if (!canViewAll) {
+            Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
+            finalSpec = finalSpec.and(activeJobsSpec);
+        }
 
         Page<Job> pageJob = jobRepository.findAll(finalSpec, pageable);
         ResultPaginationDTO rs = new ResultPaginationDTO();
@@ -448,45 +486,47 @@ public class JobService {
 
         return rs;
     }
-    
-      /**
-     * PHƯƠNG THỨC MỚI: Chuyển đổi Job Entity sang ResFetchJobDTO.
-     */
-      public ResFetchJobDTO convertToResFetchJobDTO(Job job) {
-          ResFetchJobDTO dto = new ResFetchJobDTO();
-          dto.setId(job.getId());
-          dto.setName(job.getName());
-          dto.setLocation(job.getLocation());
-          dto.setSalary(job.getSalary());
-          dto.setQuantity(job.getQuantity());
-          dto.setLevel(job.getLevel() != null ? job.getLevel().name() : null);
-          dto.setDescription(job.getDescription());
-          dto.setStartDate(job.getStartDate());
-          dto.setEndDate(job.getEndDate());
-          dto.setActive(job.isActive());
-          dto.setCreatedAt(job.getCreatedAt());
-          dto.setUpdatedAt(job.getUpdatedAt());
-          dto.setCreatedBy(job.getCreatedBy());
-          dto.setUpdatedBy(job.getUpdatedBy());
+    // ========== CHANGE END ==========
 
-          if (job.getCompany() != null) {
-              ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
-              companyInfo.setId(job.getCompany().getId());
-              companyInfo.setName(job.getCompany().getName());
-              dto.setCompany(companyInfo);
-          }
 
-          if (job.getSkills() != null) {
-              dto.setSkills(job.getSkills().stream().map(skill -> {
-                  ResFetchJobDTO.SkillInfo skillInfo = new ResFetchJobDTO.SkillInfo();
-                  skillInfo.setId(skill.getId());
-                  skillInfo.setName(skill.getName());
-                  return skillInfo;
-              }).collect(Collectors.toList()));
-          }
+    /**
+    * PHƯƠNG THỨC MỚI: Chuyển đổi Job Entity sang ResFetchJobDTO.
+    */
+    public ResFetchJobDTO convertToResFetchJobDTO(Job job) {
+        ResFetchJobDTO dto = new ResFetchJobDTO();
+        dto.setId(job.getId());
+        dto.setName(job.getName());
+        dto.setLocation(job.getLocation());
+        dto.setSalary(job.getSalary());
+        dto.setQuantity(job.getQuantity());
+        dto.setLevel(job.getLevel() != null ? job.getLevel().name() : null);
+        dto.setDescription(job.getDescription());
+        dto.setStartDate(job.getStartDate());
+        dto.setEndDate(job.getEndDate());
+        dto.setActive(job.isActive());
+        dto.setCreatedAt(job.getCreatedAt());
+        dto.setUpdatedAt(job.getUpdatedAt());
+        dto.setCreatedBy(job.getCreatedBy());
+        dto.setUpdatedBy(job.getUpdatedBy());
 
-          return dto;
-      }
+        if (job.getCompany() != null) {
+            ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
+            companyInfo.setId(job.getCompany().getId());
+            companyInfo.setName(job.getCompany().getName());
+            dto.setCompany(companyInfo);
+        }
+
+        if (job.getSkills() != null) {
+            dto.setSkills(job.getSkills().stream().map(skill -> {
+                ResFetchJobDTO.SkillInfo skillInfo = new ResFetchJobDTO.SkillInfo();
+                skillInfo.setId(skill.getId());
+                skillInfo.setName(skill.getName());
+                return skillInfo;
+            }).collect(Collectors.toList()));
+        }
+
+        return dto;
+    }
 
 
     @Value("${hoidanit.endDateJob.check-cron:0 0 0 * * ?}") // Mặc định hangf ngayf 
