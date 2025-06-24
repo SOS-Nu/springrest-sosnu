@@ -2,7 +2,9 @@ package vn.hoidanit.jobhunter.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,8 +20,10 @@ import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.request.ReqCreateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqUpdateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateCompanyDTO;
+import vn.hoidanit.jobhunter.domain.response.ResFetchCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.repository.CompanyRepository;
+import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
@@ -31,11 +35,32 @@ public class CompanyService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final JobRepository jobRepository; // Inject JobRepository
 
-    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository, RoleRepository roleRepository) {
+    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository,
+            RoleRepository roleRepository,
+            JobRepository jobRepository) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.jobRepository = jobRepository;
+    }
+
+    private ResFetchCompanyDTO convertToResFetchCompanyDTO(Company company) {
+        ResFetchCompanyDTO dto = new ResFetchCompanyDTO();
+        dto.setId(company.getId());
+        dto.setName(company.getName());
+        dto.setDescription(company.getDescription());
+        dto.setAddress(company.getAddress());
+        dto.setLogo(company.getLogo());
+        dto.setField(company.getField());
+        dto.setWebsite(company.getWebsite());
+        dto.setScale(company.getScale());
+        dto.setCountry(company.getCountry());
+        dto.setFoundingYear(company.getFoundingYear());
+        dto.setLocation(company.getLocation());
+        dto.setCreatedAt(company.getCreatedAt());
+        return dto;
     }
 
     // API FOR ADMIN
@@ -61,7 +86,7 @@ public class CompanyService {
             currentCompany.setScale(c.getScale());
             currentCompany.setCountry(c.getCountry());
             currentCompany.setFoundingYear(c.getFoundingYear());
-            
+
             return this.companyRepository.save(currentCompany);
         }
         return null;
@@ -84,21 +109,71 @@ public class CompanyService {
 
     public ResultPaginationDTO handleGetCompany(@Filter Specification<Company> spec, Pageable pageable) {
         Page<Company> pCompany = this.companyRepository.findAll(spec, pageable);
+        List<Company> companies = pCompany.getContent();
+
+        // Convert to DTOs first
+        List<ResFetchCompanyDTO> dtoList = companies.stream()
+                .map(this::convertToResFetchCompanyDTO)
+                .collect(Collectors.toList());
+
+        // Efficiently fetch job counts if the list is not empty
+        if (!dtoList.isEmpty()) {
+            List<Long> companyIds = dtoList.stream().map(ResFetchCompanyDTO::getId).collect(Collectors.toList());
+
+            List<JobRepository.CompanyJobCountDTO> jobCounts = this.jobRepository
+                    .countActiveJobsByCompanyIds(companyIds);
+
+            Map<Long, Long> jobCountMap = jobCounts.stream()
+                    .collect(Collectors.toMap(JobRepository.CompanyJobCountDTO::getCompanyId,
+                            JobRepository.CompanyJobCountDTO::getJobCount));
+
+            // Populate totalJobs for each company DTO
+            dtoList.forEach(dto -> dto.setTotalJobs(jobCountMap.getOrDefault(dto.getId(), 0L)));
+        }
+
         ResultPaginationDTO rs = new ResultPaginationDTO();
         ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
-
         mt.setPage(pageable.getPageNumber() + 1);
         mt.setPageSize(pageable.getPageSize());
         mt.setPages(pCompany.getTotalPages());
         mt.setTotal(pCompany.getTotalElements());
 
         rs.setMeta(mt);
-        rs.setResult(pCompany.getContent());
+        rs.setResult(dtoList); // Set the list of DTOs as the result
         return rs;
     }
 
+    /**
+     * PHƯƠNG THỨC CŨ: Trả về Optional<Company> để không làm ảnh hưởng đến
+     * UserService.
+     * 
+     * @param id The company ID.
+     * @return An Optional containing the Company entity if found.
+     */
     public Optional<Company> findById(long id) {
         return this.companyRepository.findById(id);
+    }
+
+    /**
+     * PHƯƠNG THỨC MỚI: Trả về DTO với totalJobs để Controller sử dụng.
+     * 
+     * @param id The company ID.
+     * @return An Optional containing the ResFetchCompanyDTO.
+     */
+    public Optional<ResFetchCompanyDTO> fetchCompanyDTOById(long id) {
+        Optional<Company> companyOptional = this.companyRepository.findById(id);
+        if (companyOptional.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Company company = companyOptional.get();
+        ResFetchCompanyDTO dto = this.convertToResFetchCompanyDTO(company);
+
+        // Fetch the active job count for this single company
+        long activeJobs = this.jobRepository.countByCompany_IdAndActiveTrue(id);
+        dto.setTotalJobs(activeJobs);
+
+        return Optional.of(dto);
     }
 
     // API FOR USER
@@ -112,7 +187,8 @@ public class CompanyService {
             throw new IdInvalidException("Người dùng không tồn tại");
         }
 
-        if (!user.isVip() || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
+        if (!user.isVip()
+                || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
             user.setVip(false);
             userRepository.save(user);
             throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công ty");
@@ -133,7 +209,6 @@ public class CompanyService {
         company.setCountry(reqCompany.getCountry());
         company.setFoundingYear(reqCompany.getFoundingYear());
         company.setLocation(reqCompany.getLocation());
-
 
         Company savedCompany = companyRepository.save(company);
         user.setCompany(savedCompany);
@@ -178,7 +253,7 @@ public class CompanyService {
 
         long companyId = currentUser.getCompany().getId();
         Company companyToUpdate = this.companyRepository.findById(companyId)
-            .orElseThrow(() -> new IdInvalidException("Công ty không tồn tại với id: " + companyId));
+                .orElseThrow(() -> new IdInvalidException("Công ty không tồn tại với id: " + companyId));
 
         companyToUpdate.setName(reqCompany.getName());
         companyToUpdate.setDescription(reqCompany.getDescription());
@@ -191,7 +266,6 @@ public class CompanyService {
         companyToUpdate.setFoundingYear(reqCompany.getFoundingYear());
         companyToUpdate.setLocation(reqCompany.getLocation());
 
-        
         return this.companyRepository.save(companyToUpdate);
     }
 
@@ -210,7 +284,7 @@ public class CompanyService {
         }
 
         long companyId = currentUser.getCompany().getId();
-        Role userRole = roleRepository.findByName("USER"); 
+        Role userRole = roleRepository.findByName("USER");
         if (userRole == null) {
             throw new IdInvalidException("Role USER không tồn tại. Không thể hoàn tác vai trò.");
         }

@@ -22,6 +22,7 @@ import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.request.ReqCreateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqUpdateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateCompanyDTO;
+import vn.hoidanit.jobhunter.domain.response.ResFetchCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.service.CompanyService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
@@ -37,8 +38,9 @@ public class CompanyController {
     }
 
     // === API DÀNH CHO ADMIN ===
-    // API của Admin tự động hỗ trợ các trường mới vì nhận trực tiếp entity `Company`
-    
+    // API của Admin tự động hỗ trợ các trường mới vì nhận trực tiếp entity
+    // `Company`
+
     @PostMapping("/companies")
     @ApiMessage("Create a company by admin")
     public ResponseEntity<Company> createCompany(@Valid @RequestBody Company reqCompany) {
@@ -47,7 +49,8 @@ public class CompanyController {
 
     @GetMapping("/companies")
     @ApiMessage("Fetch all Companies")
-    public ResponseEntity<ResultPaginationDTO> getCompany(@Filter Specification<Company> spec, Pageable pageable) {
+    public ResponseEntity<ResultPaginationDTO> getCompany(
+            @Filter Specification<Company> spec, Pageable pageable) {
         return ResponseEntity.ok(this.companyService.handleGetCompany(spec, pageable));
     }
 
@@ -67,19 +70,21 @@ public class CompanyController {
 
     @GetMapping("/companies/{id}")
     @ApiMessage("Fetch company by id")
-    public ResponseEntity<Company> fetchCompanyById(@PathVariable("id") long id) throws IdInvalidException {
-        Optional<Company> cOptional = this.companyService.findById(id);
-        if(cOptional.isEmpty()){
+    public ResponseEntity<ResFetchCompanyDTO> fetchCompanyById(@PathVariable("id") long id) throws IdInvalidException {
+        // Gọi phương thức mới để lấy DTO
+        Optional<ResFetchCompanyDTO> cOptional = this.companyService.fetchCompanyDTOById(id);
+
+        if (cOptional.isEmpty()) {
             throw new IdInvalidException("Không tìm thấy công ty với id " + id);
         }
         return ResponseEntity.ok().body(cOptional.get());
     }
-
     // === API DÀNH CHO USER QUẢN LÝ CÔNG TY CỦA MÌNH ===
 
     @PostMapping("/companies/by-user")
     @ApiMessage("Create a company for the current user")
-    public ResponseEntity<ResCreateCompanyDTO> createCompanyByUser(@Valid @RequestBody ReqCreateCompanyDTO reqCompany) throws IdInvalidException {
+    public ResponseEntity<ResCreateCompanyDTO> createCompanyByUser(@Valid @RequestBody ReqCreateCompanyDTO reqCompany)
+            throws IdInvalidException {
         return ResponseEntity.status(HttpStatus.CREATED).body(this.companyService.createCompanyByUser(reqCompany));
     }
 
