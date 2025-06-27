@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.Setter;
 
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -52,7 +51,7 @@ public class GeminiService {
     private String geminiApiUrl;
 
     public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService,
-            ObjectMapper objectMapper,JobRepository jobRepository,JobService jobService) {
+            ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService) {
         this.restTemplate = restTemplate;
         this.userService = userService;
         this.fileService = fileService;
@@ -60,7 +59,6 @@ public class GeminiService {
         this.jobRepository = jobRepository;
         this.jobService = jobService;
     }
-
 
     public ResFindCandidatesDTO findCandidates(String jobDescription) throws IdInvalidException {
         List<ResCandidateWithScoreDTO> suitableCandidates = new ArrayList<>();
@@ -79,7 +77,7 @@ public class GeminiService {
             if (currentUsers.isEmpty()) {
                 break; // Hết người dùng để kiểm tra
             }
-            
+
             // Chuyển danh sách thành Map để tra cứu nhanh hơn
             Map<Long, ResUserDetailDTO> userMap = currentUsers.stream()
                     .collect(Collectors.toMap(ResUserDetailDTO::getId, Function.identity()));
@@ -87,7 +85,8 @@ public class GeminiService {
             List<GeminiScoreResponse> rankedUsers = rankUsersWithGemini(jobDescription, currentUsers);
 
             for (GeminiScoreResponse rankedUser : rankedUsers) {
-                if (suitableCandidates.size() >= TARGET_CANDIDATES) break;
+                if (suitableCandidates.size() >= TARGET_CANDIDATES)
+                    break;
 
                 ResUserDetailDTO userDetail = userMap.get(rankedUser.getUserId());
                 if (userDetail != null) {
@@ -97,7 +96,7 @@ public class GeminiService {
 
             currentPage++;
         }
-        
+
         // Sắp xếp danh sách cuối cùng theo điểm số giảm dần
         suitableCandidates.sort(Comparator.comparingInt(ResCandidateWithScoreDTO::getScore).reversed());
 
@@ -106,16 +105,19 @@ public class GeminiService {
 
     private List<GeminiScoreResponse> rankUsersWithGemini(String jobDescription, List<ResUserDetailDTO> users) {
         // ... (phần code xây dựng `parts` cho request giữ nguyên như trước)
+
         List<Map<String, Object>> parts = new ArrayList<>();
-        
-        String initialPrompt = "You are an expert HR assistant. Based on the following job description, please analyze each candidate. " +
-                               "Each candidate's information is provided as a combination of structured JSON data and possibly an attached resume file. " +
-                               "Prioritize the information in the attached resume file if it exists. " +
-                               "\n\nJob Description:\n\"" + jobDescription + "\"\n\n";
+
+        String initialPrompt = "You are an expert HR assistant. Based on the following job description, please analyze each candidate. "
+                +
+                "Each candidate's information is provided as a combination of structured JSON data and possibly an attached resume file. "
+                +
+                "Prioritize the information in the attached resume file if it exists. " +
+                "\n\nJob Description:\n\"" + jobDescription + "\"\n\n";
         parts.add(Map.of("text", initialPrompt));
 
         for (ResUserDetailDTO user : users) {
-             try {
+            try {
                 String resumeFileName = user.getMainResume();
                 user.setMainResume(null);
                 String userJson = objectMapper.writeValueAsString(user);
@@ -129,26 +131,27 @@ public class GeminiService {
                     String encodedFile = Base64.getEncoder().encodeToString(fileBytes);
                     parts.add(Map.of("text", "Candidate data: " + userJson));
                     parts.add(Map.of("inlineData", Map.of(
-                        "mimeType", getMimeType(resumeFileName),
-                        "data", encodedFile
-                    )));
+                            "mimeType", getMimeType(resumeFileName),
+                            "data", encodedFile)));
                 } else {
                     parts.add(Map.of("text", "Candidate data (no resume file): " + userJson));
                 }
             } catch (IOException | URISyntaxException e) {
-                System.err.println("Error processing user data or file for user ID " + user.getId() + ": " + e.getMessage());
+                System.err.println(
+                        "Error processing user data or file for user ID " + user.getId() + ": " + e.getMessage());
             }
         }
-        
+
         // CẬP NHẬT PROMPT CUỐI CÙNG
-        String finalPrompt = "\n\nAfter analyzing all candidates, return a JSON array of objects. Each object must have two keys: 'userId' (a number) and 'score' (a number from 0 to 100 representing how well they match the job description). " +
-                             "Only include candidates who are a good match. Rank the array from the highest score to the lowest. " +
-                             "Response (JSON array of objects only):";
+        String finalPrompt = "\n\nAfter analyzing all candidates, return a JSON array of objects. Each object must have two keys: 'userId' (a number) and 'score' (a number from 0 to 100 representing how well they match the job description). "
+                +
+                "Only include candidates who are a good match. Rank the array from the highest score to the lowest. " +
+                "Response (JSON array of objects only):";
         parts.add(Map.of("text", finalPrompt));
-        
+
         try {
             // ... (phần code gửi request tới Gemini giữ nguyên)
-             HttpHeaders headers = new HttpHeaders();
+            HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             Map<String, Object> content = new HashMap<>();
             content.put("parts", parts);
@@ -158,11 +161,13 @@ public class GeminiService {
             String url = geminiApiUrl + "?key=" + geminiApiKey;
             String response = restTemplate.postForObject(url, entity, String.class);
             JsonNode root = objectMapper.readTree(response);
-            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text")
+                    .asText();
             String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
 
             // CẬP NHẬT PARSING RESPONSE
-            return objectMapper.readValue(cleanedJson, objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiScoreResponse.class));
+            return objectMapper.readValue(cleanedJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiScoreResponse.class));
 
         } catch (Exception e) {
             System.err.println("Error calling Gemini API or parsing response: " + e.getMessage());
@@ -189,37 +194,39 @@ public class GeminiService {
         // ... các mime type khác
         return "application/octet-stream";
     }
-    
-     /**
+
+    /**
      * PHƯƠNG THỨC MỚI: Chấm điểm một CV so với mô tả công việc.
-     * @param job Thông tin chi tiết về công việc.
+     * 
+     * @param job         Thông tin chi tiết về công việc.
      * @param cvFileBytes Nội dung file CV dưới dạng byte array.
-     * @param cvFileName Tên file CV để xác định mime-type.
+     * @param cvFileName  Tên file CV để xác định mime-type.
      * @return Điểm số từ 0-100.
      */
     public int scoreCvAgainstJob(Job job, byte[] cvFileBytes, String cvFileName) {
         // Xây dựng mô tả công việc từ các trường
         String jobDetails = String.format(
-            "Job Title: %s\nLocation: %s\nLevel: %s\nDescription: %s",
-            job.getName(), job.getLocation(), job.getLevel(), job.getDescription()
-        );
+                "Job Title: %s\nLocation: %s\nLevel: %s\nDescription: %s",
+                job.getName(), job.getLocation(), job.getLevel(), job.getDescription());
 
         // Xây dựng prompt
         List<Map<String, Object>> parts = new ArrayList<>();
-        
+
         String promptText = "As an expert HR, please evaluate the following resume against the job description. " +
-                            "Provide a suitability score on a scale of 0 to 100. " +
-                            "Return ONLY a JSON object with a single key 'score'. Example: {\"score\": 95}\n\n" +
-                            "Job Description:\n" + jobDetails + "\n\n" +
-                            "Candidate's Resume:";
+                "Provide a suitability score on a scale of 0 to 100. " +
+                "Return ONLY a JSON object with a single key 'score'. Example: {\"score\": 95}\n\n" +
+                "Job Description:\n" + jobDetails + "\n\n" +
+                "Candidate's Resume:";
         parts.add(Map.of("text", promptText));
 
         // Thêm dữ liệu file CV
+        if (cvFileBytes.length > 10 * 1024 * 1024) { // Giới hạn 10MB
+            throw new IllegalArgumentException("CV file size exceeds 10MB limit");
+        }
         String encodedFile = Base64.getEncoder().encodeToString(cvFileBytes);
         parts.add(Map.of("inlineData", Map.of(
-            "mimeType", getMimeType(cvFileName),
-            "data", encodedFile
-        )));
+                "mimeType", getMimeType(cvFileName),
+                "data", encodedFile)));
 
         // Gửi request tới Gemini
         try {
@@ -233,10 +240,11 @@ public class GeminiService {
 
             // Parse response
             JsonNode root = objectMapper.readTree(response);
-            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text")
+                    .asText();
             String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
             JsonNode scoreNode = objectMapper.readTree(cleanedJson);
-            
+
             return scoreNode.path("score").asInt(0); // Trả về 0 nếu không tìm thấy score
 
         } catch (Exception e) {
@@ -246,8 +254,8 @@ public class GeminiService {
     }
 
     public ResFindJobsDTO findJobsForCandidate(
-        String skillsDescription, byte[] cvFileBytes, String cvFileName) throws IdInvalidException {
-        
+            String skillsDescription, byte[] cvFileBytes, String cvFileName) throws IdInvalidException {
+
         List<ResJobWithScoreDTO> suitableJobs = new ArrayList<>();
         ResultPaginationDTO.Meta lastMeta = null;
         int currentPage = 0;
@@ -255,15 +263,14 @@ public class GeminiService {
         final int TARGET_JOBS = 10;
 
         // TẠO SPECIFICATION ĐỂ LỌC CÁC JOB CÓ 'active = true'
-        Specification<Job> spec = (root, query, criteriaBuilder) ->
-                criteriaBuilder.equal(root.get("active"), true);
+        Specification<Job> spec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
 
         while (suitableJobs.size() < TARGET_JOBS) {
             Pageable pageable = PageRequest.of(currentPage, PAGE_SIZE);
-            
+
             // SỬ DỤNG SPECIFICATION KHI TRUY VẤN DATABASE
             Page<Job> paginatedJobs = jobRepository.findAll(spec, pageable);
-            
+
             // Luôn cập nhật meta cho trang hiện tại để đảm bảo không bị null
             lastMeta = new ResultPaginationDTO.Meta();
             lastMeta.setPage(paginatedJobs.getNumber() + 1);
@@ -277,13 +284,14 @@ public class GeminiService {
 
             List<Job> currentJobs = paginatedJobs.getContent();
             Map<Long, Job> jobMap = currentJobs.stream()
-                .collect(Collectors.toMap(Job::getId, Function.identity()));
+                    .collect(Collectors.toMap(Job::getId, Function.identity()));
 
             List<GeminiJobScoreResponse> rankedJobs = rankJobsWithGemini(
-                skillsDescription, cvFileBytes, cvFileName, currentJobs);
+                    skillsDescription, cvFileBytes, cvFileName, currentJobs);
 
             for (GeminiJobScoreResponse rankedJob : rankedJobs) {
-                if (suitableJobs.size() >= TARGET_JOBS) break;
+                if (suitableJobs.size() >= TARGET_JOBS)
+                    break;
 
                 Job jobDetail = jobMap.get(rankedJob.getJobId());
                 if (jobDetail != null) {
@@ -299,15 +307,16 @@ public class GeminiService {
     }
 
     private List<GeminiJobScoreResponse> rankJobsWithGemini(
-        String skillsDescription, byte[] cvFileBytes, String cvFileName, List<Job> jobs) {
-        
+            String skillsDescription, byte[] cvFileBytes, String cvFileName, List<Job> jobs) {
+
         List<Map<String, Object>> parts = new ArrayList<>();
-        
-        String initialPrompt = "You are an expert career advisor. Based on the candidate's skills and/or resume, please evaluate the following job openings. " +
-                               "Prioritize the information in the attached resume file if it exists.\n\n" +
-                               "Candidate's Information:";
+
+        String initialPrompt = "You are an expert career advisor. Based on the candidate's skills and/or resume, please evaluate the following job openings. "
+                +
+                "Prioritize the information in the attached resume file if it exists.\n\n" +
+                "Candidate's Information:";
         parts.add(Map.of("text", initialPrompt));
-        
+
         // Thêm thông tin ứng viên (text hoặc file)
         if (cvFileBytes != null) {
             String encodedFile = Base64.getEncoder().encodeToString(cvFileBytes);
@@ -321,30 +330,38 @@ public class GeminiService {
 
         try {
             // Thêm thông tin các công việc
-            String jobsJson = objectMapper.writeValueAsString(jobs.stream().map(jobService::convertToResFetchJobDTO).collect(Collectors.toList()));
+            String jobsJson = objectMapper.writeValueAsString(
+                    jobs.stream().map(jobService::convertToResFetchJobDTO).collect(Collectors.toList()));
             parts.add(Map.of("text", "\n\nHere are the job openings to evaluate:\n" + jobsJson));
         } catch (Exception e) {
             System.err.println("Error converting jobs to JSON: " + e.getMessage());
         }
 
         // Yêu cầu cuối cùng
-        String finalPrompt = "\n\nAfter analyzing all jobs, return a JSON array of objects. Each object must have 'jobId' and 'score' (0-100). " +
-                             "Rank them from highest score to lowest. Only include jobs that are a good match. " +
-                             "Response (JSON array of objects only):";
+        String finalPrompt = "\n\nAfter analyzing all jobs, return a JSON array of objects. Each object must have 'jobId' and 'score' (0-100). "
+                +
+                "Rank them from highest score to lowest. Only include jobs that are a good match and have a score greater than 0. "
+                +
+                "Exclude jobs with a score of 0, such as those where the candidate's skills do not match the job requirements or the job location is incompatible with the candidate's preferences. "
+                +
+                "Response (JSON array of objects only):";
         parts.add(Map.of("text", finalPrompt));
-        
+
         try {
             // Gửi request tới Gemini (logic giữ nguyên)
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of("contents", Collections.singletonList(Map.of("parts", parts))), headers);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(
+                    Map.of("contents", Collections.singletonList(Map.of("parts", parts))), headers);
             String url = geminiApiUrl + "?key=" + geminiApiKey;
             String response = restTemplate.postForObject(url, entity, String.class);
             JsonNode root = objectMapper.readTree(response);
-            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text")
+                    .asText();
             String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
 
-            return objectMapper.readValue(cleanedJson, objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiJobScoreResponse.class));
+            return objectMapper.readValue(cleanedJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiJobScoreResponse.class));
         } catch (Exception e) {
             System.err.println("Error calling Gemini API for finding jobs: " + e.getMessage());
             return Collections.emptyList();
@@ -352,7 +369,8 @@ public class GeminiService {
     }
 
     // Helper class để parse response
-    @Getter @Setter
+    @Getter
+    @Setter
     private static class GeminiJobScoreResponse {
         private long jobId;
         private int score;
