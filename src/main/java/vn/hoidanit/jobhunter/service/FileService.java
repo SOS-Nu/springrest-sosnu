@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -18,8 +19,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
-
 
 @Service
 public class FileService {
@@ -78,9 +77,9 @@ public class FileService {
         return new InputStreamResource(new FileInputStream(file));
     }
 
-
     /**
      * PHƯƠNG THỨC ĐÃ CẬP NHẬT: Trích xuất nội dung văn bản từ một file.
+     * 
      * @param file File đầu vào (PDF, DOCX, TXT, etc.)
      * @return Nội dung văn bản của file
      * @throws IOException
@@ -96,24 +95,63 @@ public class FileService {
         }
     }
 
-      /**
+    /**
      * PHƯƠNG THỨC MỚI: Đọc một file từ storage và trả về dưới dạng byte array.
+     * 
      * @param fileName Tên file
-     * @param folder Thư mục chứa file
+     * @param folder   Thư mục chứa file
      * @return a byte array of the file content
      * @throws IOException
      * @throws URISyntaxException
      */
     public byte[] readFileAsBytes(String fileName, String folder) throws IOException, URISyntaxException {
-        if (fileName == null || folder == null) return null;
-        
+        if (fileName == null || folder == null)
+            return null;
+
         URI uri = new URI(baseURI + folder + "/" + fileName);
         Path path = Paths.get(uri);
-        
+
         if (Files.exists(path) && !Files.isDirectory(path)) {
             return Files.readAllBytes(path);
         }
-        
+
         return null; // Trả về null nếu file không tồn tại
     }
+
+    /**
+     * PHƯƠNG THỨC MỚI: Trích xuất nội dung văn bản từ một file đã được lưu trữ.
+     *
+     * @param fileName Tên file cần trích xuất.
+     * @param folder   Thư mục chứa file.
+     * @return Nội dung văn bản của file.
+     * @throws IOException
+     * @throws URISyntaxException
+     */
+    public String extractTextFromStoredFile(String fileName, String folder) throws IOException, URISyntaxException {
+        byte[] fileBytes = readFileAsBytes(fileName, folder);
+        if (fileBytes == null || fileBytes.length == 0) {
+            return null;
+        }
+        return extractTextFromBytes(fileBytes);
+    }
+
+    /**
+     * PHƯƠNG THỨC MỚI: Trích xuất nội dung văn bản từ một mảng byte.
+     *
+     * @param fileBytes Mảng byte của file.
+     * @return Nội dung văn bản.
+     * @throws IOException
+     */
+    public String extractTextFromBytes(byte[] fileBytes) throws IOException {
+        if (fileBytes == null || fileBytes.length == 0) {
+            return "";
+        }
+        Tika tika = new Tika();
+        try (InputStream stream = new ByteArrayInputStream(fileBytes)) {
+            return tika.parseToString(stream);
+        } catch (TikaException e) {
+            throw new IOException("Lỗi khi phân tích cú pháp dữ liệu byte: " + e.getMessage(), e);
+        }
+    };
+
 }
