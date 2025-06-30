@@ -35,6 +35,7 @@ public class ResUserDetailDTO {
         dto.setGender(user.getGender());
         dto.setMainResume(user.getMainResume());
         dto.setPublic(user.isPublic()); // Gán giá trị isPublic
+        dto.setAvatar(user.getAvatar());
 
         // LOGIC CÓ ĐIỀU KIỆN: Kiểm tra isPublic trước khi gán email và address
         if (user.isPublic()) {
