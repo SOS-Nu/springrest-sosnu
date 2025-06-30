@@ -70,7 +70,8 @@ public class SecurityConfiguration {
                 "/api/v1/users/detail/**",
                 "/api/v1/gemini/**",
                 "/api/v1/users/is-public",
-                                "/api/v1/dashboard"
+                "/api/v1/dashboard",
+                "api/v1/files/**"
 
         };
         http
@@ -82,7 +83,10 @@ public class SecurityConfiguration {
                                 .requestMatchers(HttpMethod.POST, "/api/v1/jobs/by-user-company").authenticated()
                                 .requestMatchers(HttpMethod.PUT, "/api/v1/jobs/by-user-company").authenticated()
                                 .requestMatchers(HttpMethod.DELETE, "/api/v1/jobs/by-user-company/{id}").authenticated()
-                                .requestMatchers(HttpMethod.POST, "/api/v1/companies/by-user").authenticated() //tao company by new user
+                                .requestMatchers(HttpMethod.POST, "/api/v1/companies/by-user").authenticated() // tao
+                                                                                                               // company
+                                                                                                               // by new
+                                                                                                               // user
                                 .requestMatchers(HttpMethod.POST, "/api/v1/comments").authenticated()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/users/main-resume").authenticated()
                                 .requestMatchers("/api/v1/online-resumes/**").authenticated()

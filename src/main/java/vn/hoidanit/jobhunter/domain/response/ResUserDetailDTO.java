@@ -20,6 +20,7 @@ public class ResUserDetailDTO {
     private String address; // Sẽ được gán giá trị có điều kiện
     private String mainResume;
     private boolean isPublic; // Thêm trường này vào DTO
+    private String avatar;
 
     private ResOnlineResumeDTO.ResGetOnlineResumeDTO onlineResume;
     private List<ResWorkExperienceDTO.WorkExperienceResponse> workExperiences;
@@ -41,7 +42,7 @@ public class ResUserDetailDTO {
             dto.setAddress(user.getAddress());
         } else {
             // Nếu không public, có thể gán null hoặc một giá trị ẩn
-            dto.setEmail(null); 
+            dto.setEmail(null);
             dto.setAddress(null);
         }
 
@@ -53,8 +54,7 @@ public class ResUserDetailDTO {
         // Map danh sách WorkExperience nếu có
         if (user.getWorkExperiences() != null && !user.getWorkExperiences().isEmpty()) {
             dto.setWorkExperiences(
-                    ResWorkExperienceDTO.convertToListResponse(user.getWorkExperiences())
-            );
+                    ResWorkExperienceDTO.convertToListResponse(user.getWorkExperiences()));
         }
 
         return dto;

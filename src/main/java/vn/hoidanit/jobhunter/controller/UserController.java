@@ -121,11 +121,11 @@ public class UserController {
         ResBulkCreateUserDTO result = this.userService.handleBulkCreateUsers(userDTOs);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
-    
+
     @PostMapping("/users/main-resume")
     @ApiMessage("Upload main resume for user")
     public ResponseEntity<ResUploadFileDTO> uploadMainResume(
-            @RequestParam(name = "file", required = false) MultipartFile file) 
+            @RequestParam(name = "file", required = false) MultipartFile file)
             throws URISyntaxException, IOException, StorageException, IdInvalidException {
         return ResponseEntity.ok().body(userService.uploadMainResume(file));
     }
@@ -137,10 +137,13 @@ public class UserController {
         return ResponseEntity.ok(userDetail);
     }
 
-        /**
+    /**
      * ENDPOINT MỚI: Lấy danh sách chi tiết người dùng với phân trang.
-     * @param pageable Spring sẽ tự động tạo đối tượng này từ các tham số ?page= & ?size=
-     * @return ResponseEntity chứa đối tượng phân trang với danh sách chi tiết người dùng
+     * 
+     * @param pageable Spring sẽ tự động tạo đối tượng này từ các tham số ?page= &
+     *                 ?size=
+     * @return ResponseEntity chứa đối tượng phân trang với danh sách chi tiết người
+     *         dùng
      */
     @GetMapping("/users/detail")
     @ApiMessage("Lấy danh sách chi tiết người dùng với phân trang và bộ lọc")
@@ -150,14 +153,13 @@ public class UserController {
         return ResponseEntity.ok(this.userService.fetchAllUserDetails(spec, pageable));
     }
 
+    @PutMapping("/users/is-public")
+    @ApiMessage("Update your public profile status")
+    public ResponseEntity<Void> updateIsPublicStatus(
+            @RequestBody ReqUpdateIsPublicDTO dto) throws IdInvalidException {
 
-@PutMapping("/users/is-public")
-@ApiMessage("Update your public profile status")
-public ResponseEntity<Void> updateIsPublicStatus(
-        @RequestBody ReqUpdateIsPublicDTO dto) throws IdInvalidException {
-            
-    this.userService.updateUserIsPublic(dto.isPublic());
-    return ResponseEntity.ok().build();
-}
+        this.userService.updateUserIsPublic(dto.isPublic());
+        return ResponseEntity.ok().build();
+    }
 
 }

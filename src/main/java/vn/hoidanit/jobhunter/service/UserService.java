@@ -57,7 +57,7 @@ public class UserService {
 
     public UserService(UserRepository userRepository, CompanyService companyService,
             RoleService roleService, PasswordEncoder passwordEncoder, RoleRepository roleRepository,
-            ChatRoomRepository chatRoomRepository, FileService fileService,OnlineResumeService onlineResumeService) {
+            ChatRoomRepository chatRoomRepository, FileService fileService, OnlineResumeService onlineResumeService) {
         this.userRepository = userRepository;
         this.companyService = companyService;
         this.roleService = roleService;
@@ -67,12 +67,12 @@ public class UserService {
         this.fileService = fileService;
         this.onlineResumeService = onlineResumeService;
     }
-    
+
     @Value("${hoidanit.upload-file.base-uri}")
     private String baseURI;
 
     @Transactional
-    public ResUploadFileDTO uploadMainResume(MultipartFile file) 
+    public ResUploadFileDTO uploadMainResume(MultipartFile file)
             throws IdInvalidException, StorageException, IOException, URISyntaxException {
         // Lấy thông tin người dùng hiện tại
         String email = SecurityUtil.getCurrentUserLogin()
@@ -146,7 +146,7 @@ public class UserService {
         mt.setPage(pageable.getPageNumber() + 1);
         mt.setPageSize(pageable.getPageSize());
 
-    mt.setPages(pageUser.getTotalPages());
+        mt.setPages(pageUser.getTotalPages());
         mt.setTotal(pageUser.getTotalElements());
         //
         rs.setMeta(mt);
@@ -168,6 +168,7 @@ public class UserService {
             currentUser.setGender(reqUser.getGender());
             currentUser.setAge(reqUser.getAge());
             currentUser.setName(reqUser.getName());
+            currentUser.setAvatar(reqUser.getAvatar());
 
             if (reqUser.getCompany() != null) {
                 Optional<Company> companyOptional = this.companyService.findById(reqUser.getCompany().getId());
@@ -204,6 +205,7 @@ public class UserService {
         res.setCreatedAt(user.getCreatedAt());
         res.setGender(user.getGender());
         res.setAddress(user.getAddress());
+        res.setAvatar(user.getAvatar());
         if (user.getCompany() != null) {
             com.setId(user.getCompany().getId());
             com.setName(user.getCompany().getName());
@@ -226,6 +228,7 @@ public class UserService {
         res.setUpdatedAt(user.getUpdatedAt());
         res.setGender(user.getGender());
         res.setAddress(user.getAddress());
+        res.setAvatar(user.getAvatar());
         return res;
     }
 
@@ -254,6 +257,7 @@ public class UserService {
         res.setCreatedAt(user.getCreatedAt());
         res.setGender(user.getGender());
         res.setAddress(user.getAddress());
+        res.setAvatar(user.getAvatar());
         return res;
     }
 
@@ -313,6 +317,7 @@ public class UserService {
 
         return new ResBulkCreateUserDTO(total, success, total - success, failedEmails);
     }
+
     @Value("${hoidanit.vip.duration-minutes:1}") // Mặc định 1 phút nếu không cấu hình
     private long vipDurationMinutes;
 
@@ -350,7 +355,7 @@ public class UserService {
     @Value("${hoidanit.vip.check-cron:0 0 0 1 * ?}") // Mặc định hàng tháng nếu không cấu hình
     private String vipCheckCron;
 
-    @Scheduled(cron = "${hoidanit.vip.check-cron}") 
+    @Scheduled(cron = "${hoidanit.vip.check-cron}")
     public void resetCvSubmissionCount() {
         List<User> users = userRepository.findAll();
         users.forEach(user -> {
@@ -398,61 +403,62 @@ public class UserService {
         return this.userRepository.findById(id).get();
     }
 
-        @Transactional(readOnly = true)
-        public ResUserDetailDTO fetchUserDetailById(long id) throws IdInvalidException {
-            User user = this.userRepository.findById(id)
-                    .orElseThrow(() -> new IdInvalidException("User với id = " + id + " không tồn tại"));
+    @Transactional(readOnly = true)
+    public ResUserDetailDTO fetchUserDetailById(long id) throws IdInvalidException {
+        User user = this.userRepository.findById(id)
+                .orElseThrow(() -> new IdInvalidException("User với id = " + id + " không tồn tại"));
 
-            // Hibernate sẽ tự động fetch các collection (workExperiences) và object (onlineResume)
-            // do chúng ta truy cập chúng trong một phiên giao dịch (transactional session).
-            return ResUserDetailDTO.convertToDTO(user);
+        // Hibernate sẽ tự động fetch các collection (workExperiences) và object
+        // (onlineResume)
+        // do chúng ta truy cập chúng trong một phiên giao dịch (transactional session).
+        return ResUserDetailDTO.convertToDTO(user);
+    }
+
+    @Transactional(readOnly = true)
+    public ResultPaginationDTO fetchAllUserDetails(Specification<User> spec, Pageable pageable) {
+        // Cập nhật lời gọi repository để bao gồm cả specification
+        Page<User> pageUser = this.userRepository.findAll(spec, pageable);
+
+        ResultPaginationDTO rs = new ResultPaginationDTO();
+        ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
+
+        // Thiết lập thông tin meta cho phân trang
+        mt.setPage(pageable.getPageNumber() + 1);
+        mt.setPageSize(pageable.getPageSize());
+        mt.setPages(pageUser.getTotalPages());
+        mt.setTotal(pageUser.getTotalElements());
+        rs.setMeta(mt);
+
+        // Chuyển đổi danh sách User sang danh sách ResUserDetailDTO
+        List<ResUserDetailDTO> listUserDetails = pageUser.getContent().stream()
+                .map(ResUserDetailDTO::convertToDTO)
+                .collect(Collectors.toList());
+
+        rs.setResult(listUserDetails);
+
+        return rs;
+    }
+
+    @Transactional
+    public void updateUserIsPublic(boolean isPublic) throws IdInvalidException {
+        // Lấy email của người dùng đang đăng nhập từ security context
+        Optional<String> currentUserLoginOptional = SecurityUtil.getCurrentUserLogin();
+        if (currentUserLoginOptional.isEmpty()) {
+            throw new IdInvalidException("Không tìm thấy thông tin người dùng đang đăng nhập.");
         }
-    
-        @Transactional(readOnly = true)
-        public ResultPaginationDTO fetchAllUserDetails(Specification<User> spec, Pageable pageable) {
-            // Cập nhật lời gọi repository để bao gồm cả specification
-            Page<User> pageUser = this.userRepository.findAll(spec, pageable);
 
-            ResultPaginationDTO rs = new ResultPaginationDTO();
-            ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
+        String email = currentUserLoginOptional.get();
 
-            // Thiết lập thông tin meta cho phân trang
-            mt.setPage(pageable.getPageNumber() + 1);
-            mt.setPageSize(pageable.getPageSize());
-            mt.setPages(pageUser.getTotalPages());
-            mt.setTotal(pageUser.getTotalElements());
-            rs.setMeta(mt);
-
-            // Chuyển đổi danh sách User sang danh sách ResUserDetailDTO
-            List<ResUserDetailDTO> listUserDetails = pageUser.getContent().stream()
-                    .map(ResUserDetailDTO::convertToDTO)
-                    .collect(Collectors.toList());
-
-            rs.setResult(listUserDetails);
-
-            return rs;
+        // Tìm user trong database bằng email
+        User currentUser = this.userRepository.findByEmail(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng với email " + email + " không tồn tại.");
         }
-        
-        @Transactional
-        public void updateUserIsPublic(boolean isPublic) throws IdInvalidException {
-            // Lấy email của người dùng đang đăng nhập từ security context
-            Optional<String> currentUserLoginOptional = SecurityUtil.getCurrentUserLogin();
-            if (currentUserLoginOptional.isEmpty()) {
-                throw new IdInvalidException("Không tìm thấy thông tin người dùng đang đăng nhập.");
-            }
-        
-            String email = currentUserLoginOptional.get();
-        
-            // Tìm user trong database bằng email
-            User currentUser = this.userRepository.findByEmail(email);
-            if (currentUser == null) {
-                throw new IdInvalidException("Người dùng với email " + email + " không tồn tại.");
-            }
-        
-            // Cập nhật trạng thái isPublic
-            currentUser.setPublic(isPublic);
-        
-            // Lưu lại vào database
-            this.userRepository.save(currentUser);
-        }
+
+        // Cập nhật trạng thái isPublic
+        currentUser.setPublic(isPublic);
+
+        // Lưu lại vào database
+        this.userRepository.save(currentUser);
+    }
 }

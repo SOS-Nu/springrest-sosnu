@@ -6,6 +6,7 @@ import vn.hoidanit.jobhunter.domain.entity.OnlineResume;
 import vn.hoidanit.jobhunter.domain.entity.Skill;
 
 import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,6 +22,7 @@ public class ResOnlineResumeDTO {
         private String phone;
         private String address;
         private String summary;
+        private Date dateOfBirth;
         private String certifications;
         private String educations;
         private String languages;
@@ -74,7 +76,7 @@ public class ResOnlineResumeDTO {
         dto.setUpdatedAt(resume.getUpdatedAt());
         return dto;
     }
-    
+
     public static ResGetOnlineResumeDTO convertToGetDTO(OnlineResume resume) {
         ResGetOnlineResumeDTO dto = new ResGetOnlineResumeDTO();
         mapBaseFields(dto, resume);
@@ -94,6 +96,7 @@ public class ResOnlineResumeDTO {
         dto.setCertifications(resume.getCertifications());
         dto.setEducations(resume.getEducations());
         dto.setLanguages(resume.getLanguages());
+        dto.setDateOfBirth(resume.getDateOfBirth());
 
         if (resume.getSkills() != null) {
             dto.setSkills(resume.getSkills().stream().map(skill -> {

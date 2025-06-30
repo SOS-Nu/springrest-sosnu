@@ -59,6 +59,7 @@ public class User {
     private Instant updatedAt;
     private String createdBy;
     private String updatedBy;
+    private String avatar;
     private boolean isVip;
     private LocalDateTime vipExpiryDate;
     private int cvSubmissionCount;
