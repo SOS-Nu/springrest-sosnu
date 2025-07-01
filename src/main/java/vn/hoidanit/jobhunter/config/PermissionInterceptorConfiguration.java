@@ -37,7 +37,9 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 "/api/v1/users/is-public",
                 "/api/v1/dashboard",
                 "/api/v1/auth/register/**",
-                "api/v1/files/**"
+                "/api/v1/files/**",
+                "/api/v1/auth/send-otp",
+                "/api/v1/auth/verify-otp-change-password"
 
         };
         registry.addInterceptor(getPermissionInterceptor())
