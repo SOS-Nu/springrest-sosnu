@@ -2,11 +2,15 @@ package vn.hoidanit.jobhunter.domain.response;
 
 import java.time.Instant;
 
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
+import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @Getter
 @Setter
@@ -25,6 +29,9 @@ public class ResUserDTO {
     private Instant createdAt;
 
     private CompanyUser company;
+
+    @Enumerated(EnumType.STRING)
+    private UserStatusEnum status;
 
     private RoleUser role;
 

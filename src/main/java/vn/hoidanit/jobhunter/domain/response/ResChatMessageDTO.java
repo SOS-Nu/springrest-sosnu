@@ -1,10 +1,14 @@
 package vn.hoidanit.jobhunter.domain.response;
 
 import java.util.Date;
+
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.Getter;
 import lombok.Setter;
 import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
 import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @Getter
 @Setter
@@ -22,6 +26,9 @@ public class ResChatMessageDTO {
         private long id;
         private String name;
         private String email;
+
+        @Enumerated(EnumType.STRING)
+        private UserStatusEnum status;
     }
 
     // Phương thức chuyển đổi từ Entity sang DTO
@@ -38,6 +45,7 @@ public class ResChatMessageDTO {
             senderDTO.setId(senderEntity.getId());
             senderDTO.setName(senderEntity.getName());
             senderDTO.setEmail(senderEntity.getEmail());
+            senderDTO.setStatus(senderEntity.getStatus());
             dto.setSender(senderDTO);
         }
 
@@ -48,6 +56,7 @@ public class ResChatMessageDTO {
             receiverDTO.setId(receiverEntity.getId());
             receiverDTO.setName(receiverEntity.getName());
             receiverDTO.setEmail(receiverEntity.getEmail());
+            receiverDTO.setStatus(receiverEntity.getStatus());
 
             dto.setReceiver(receiverDTO);
         }

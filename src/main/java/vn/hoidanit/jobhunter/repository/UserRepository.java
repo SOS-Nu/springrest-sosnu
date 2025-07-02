@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
@@ -20,5 +21,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     List<User> findByCompany(Company company);
 
     List<User> findByIdIn(List<Long> id);
+
+    List<User> findAllByStatusAndIdNot(UserStatusEnum status, Long id);
 
 }

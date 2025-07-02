@@ -393,15 +393,35 @@ public class UserService {
         return connectedUsers.stream()
                 .map(user -> {
                     ResUserDTO dto = new ResUserDTO();
-                    // Map các trường cần thiết từ User sang ResUserDTO
-                    // Ví dụ:
+
+                    // 1. Map các trường luôn có giá trị
                     dto.setId(user.getId());
                     dto.setName(user.getName());
                     dto.setEmail(user.getEmail());
-                    // ... các trường khác
+                    dto.setAvatar(user.getAvatar());
+                    dto.setAge(user.getAge());
+                    dto.setStatus(user.getStatus());
+                    // ... các trường khác của User
+
+                    // 2. KIỂM TRA NULL TRƯỚC KHI XỬ LÝ COMPANY
+                    if (user.getCompany() != null) {
+                        Company companyEntity = user.getCompany();
+                        ResUserDTO.CompanyUser companyDTO = new ResUserDTO.CompanyUser();
+                        companyDTO.setId(companyEntity.getId());
+                        companyDTO.setName(companyEntity.getName());
+                        dto.setCompany(companyDTO);
+                    }
+
+                    // cach 2
+                    if (user.getRole() != null) {
+                        dto.setRole(new ResUserDTO.RoleUser(
+                                user.getRole().getId(),
+                                user.getRole().getName()));
+                    }
+
                     return dto;
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()); // Đừng quên bước thu thập kết quả
     }
 
     public void updateStatus(User userPayload) {
