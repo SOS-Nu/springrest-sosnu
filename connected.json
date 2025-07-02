@@ -1,0 +1,60 @@
+{
+  "statusCode": 200,
+  "message": "call API successfully",
+  "error": null,
+  "data": {
+    "id": 1,
+    "firstName": "admin",
+    "lastName": "null super",
+    "email": "admin@gmail.com",
+    "gender": "MALE",
+    "address": "VIETNAM",
+    "dateOfBirth": 1750352400000,
+    "createdAt": 1748763098.242537,
+    "role": {
+      "id": 1,
+      "createdAt": 1748763098.05114,
+      "updatedAt": null,
+      "createdBy": "",
+      "updatedBy": null,
+      "name": "ADMIN",
+      "description": "this account has full permissions",
+      "active": true
+    },
+    "company": null,
+    "phoneNumber": "0385382597",
+    "avatarUrl": "",
+
+    "onlineResumes": [
+      {
+        "id": 1,
+        "createdAt": 1748765095.744736,
+        "updatedAt": null,
+        "createdBy": "admin@gmail.com",
+        "updatedBy": null,
+        "title": "Le Van Nguyen",
+        "fullName": "null super admin",
+        "email": "admin@gmail.com",
+        "phone": "0385382597",
+        "dateOfBirth": 1750352400000,
+        "address": "VIETNAM",
+        "summary": "<p>toi la le van nguyen full stack dev</p>",
+        "skills": [
+          {
+            "id": 1,
+            "createdAt": 1748763352.91502,
+            "updatedAt": null,
+            "createdBy": "admin@gmail.com",
+            "updatedBy": null,
+            "name": "JAVA"
+          }
+        ],
+        "certifications": "<p>ielts 9.0</p>",
+        "educations": "<p>dai hoc iuh</p>",
+        "languages": "<p>tieng anh</p>",
+        "workExperiences": []
+      }
+    ],
+    "mainResume": "1749884471321-1749728273913-my-cv.pdf"
+  }
+}

@@ -7,8 +7,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -368,35 +370,67 @@ public class UserService {
         });
     }
 
-    // chat
-    public void updateStatus(User user) {
-        var storedUser = this.userRepository.findByEmail(user.getEmail());
-        storedUser.setStatus(UserStatusEnum.ONLINE);
-        this.userRepository.save(storedUser);
-    }
+    public List<ResUserDTO> findConnectedUsers(Long userId) {
+        // B1: Tìm tất cả các phòng chat mà userId này là người gửi hoặc người nhận.
+        List<ChatRoom> chatRooms = this.chatRoomRepository.findBySenderIdOrReceiverId(userId, userId);
 
-    public void disconnect(User user) {
-        var storedUser = this.userRepository.findByEmail(user.getEmail());
-        if (storedUser != null) {
-            storedUser.setStatus(UserStatusEnum.OFFLINE);
-            this.userRepository.save(storedUser);
-        }
-    }
+        // B2: Từ các phòng chat, trích xuất ID của người dùng còn lại (partner).
+        // Sử dụng Set để đảm bảo mỗi ID chỉ xuất hiện một lần.
+        // B2: Từ các phòng chat, trích xuất ID của người dùng còn lại (partner).
+        // Sử dụng Set để đảm bảo mỗi ID chỉ xuất hiện một lần.
+        Set<Long> partnerIds = chatRooms.stream()
+                .map(chatRoom -> chatRoom.getSender().getId() == userId // Dòng đã được sửa
+                        ? chatRoom.getReceiver().getId()
+                        : chatRoom.getSender().getId())
+                .collect(Collectors.toSet());
 
-    public List<User> findConnectedUsers(Long id) {
+        // B3: Dựa vào danh sách ID partners, truy vấn thông tin User đầy đủ.
+        // Giả sử bạn có phương thức findAllById trong UserRepository.
+        List<User> connectedUsers = this.userRepository.findAllById(partnerIds);
 
-        List<ChatRoom> chatRooms = this.chatRoomRepository.findBySenderId(id);
-
-        if (chatRooms.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<Long> idReceiveList = chatRooms.stream()
-                .map(room -> room.getReceiver().getId())
-                .distinct()
+        // B4: Chuyển đổi danh sách User entity sang danh sách ResUserDTO.
+        // Giả sử ResUserDTO có một phương thức chuyển đổi tương tự.
+        return connectedUsers.stream()
+                .map(user -> {
+                    ResUserDTO dto = new ResUserDTO();
+                    // Map các trường cần thiết từ User sang ResUserDTO
+                    // Ví dụ:
+                    dto.setId(user.getId());
+                    dto.setName(user.getName());
+                    dto.setEmail(user.getEmail());
+                    // ... các trường khác
+                    return dto;
+                })
                 .collect(Collectors.toList());
+    }
 
-        return this.userRepository.findByIdIn(idReceiveList);
+    public void updateStatus(User userPayload) {
+        // B1: Tìm user trong DB bằng ID từ payload
+        Optional<User> userOptional = this.userRepository.findById(userPayload.getId());
+
+        // B2: Nếu tìm thấy, cập nhật status và lưu lại
+        if (userOptional.isPresent()) {
+            User userInDB = userOptional.get();
+            userInDB.setStatus(UserStatusEnum.ONLINE); // Gán trạng thái ONLINE
+            this.userRepository.save(userInDB); // Lưu thay đổi vào DB
+        }
+    }
+
+    /**
+     * Cập nhật trạng thái người dùng thành OFFLINE và lưu vào DB.
+     *
+     * @param userPayload Dữ liệu người dùng gửi từ client.
+     */
+    public void disconnect(User userPayload) {
+        // B1: Tìm user trong DB bằng ID từ payload
+        Optional<User> userOptional = this.userRepository.findById(userPayload.getId());
+
+        // B2: Nếu tìm thấy, cập nhật status và lưu lại
+        if (userOptional.isPresent()) {
+            User userInDB = userOptional.get();
+            userInDB.setStatus(UserStatusEnum.OFFLINE); // Gán trạng thái OFFLINE
+            this.userRepository.save(userInDB); // Lưu thay đổi vào DB
+        }
     }
 
     public User findUserById(Long id) {

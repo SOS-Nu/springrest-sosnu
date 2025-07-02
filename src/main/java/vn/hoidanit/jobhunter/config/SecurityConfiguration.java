@@ -73,7 +73,7 @@ public class SecurityConfiguration {
                 "/api/v1/dashboard",
                 "/api/v1/files/**",
                 "/api/v1/auth/send-otp",
-                "/api/v1/auth/verify-otp-change-password"
+                "/api/v1/auth/verify-otp-change-password",
 
         };
         http

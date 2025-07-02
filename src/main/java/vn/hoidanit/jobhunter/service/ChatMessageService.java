@@ -2,10 +2,12 @@ package vn.hoidanit.jobhunter.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
+import vn.hoidanit.jobhunter.domain.response.ResChatMessageDTO;
 import vn.hoidanit.jobhunter.repository.ChatMessageRepository;
 import vn.hoidanit.jobhunter.service.IService.IChatMessageService;
 
@@ -34,14 +36,18 @@ public class ChatMessageService implements IChatMessageService {
         return chatMessage;
     }
 
+    // THAY ĐỔI PHƯƠNG THỨC NÀY
     @Override
-    public List<ChatMessage> findChatMessages(
+    public List<ResChatMessageDTO> findChatMessages( // 1. Thay đổi kiểu trả về
             Long senderId,
             Long recipientId) {
-        var chatroomName = chatRoomService.getChatRoomName(senderId, recipientId, false);
-        List<ChatMessage> chatList = new ArrayList<>();
-        chatList = this.chatMessageRepository.findByRoomName(chatroomName);
-        return chatList;
+        // Lấy danh sách entity từ repository
+        List<ChatMessage> messages = this.chatMessageRepository.findConversation(senderId, recipientId);
+
+        // 2. Chuyển đổi danh sách entity sang danh sách DTO
+        return messages.stream()
+                .map(ResChatMessageDTO::convertToDTO)
+                .collect(Collectors.toList());
     }
 
 }

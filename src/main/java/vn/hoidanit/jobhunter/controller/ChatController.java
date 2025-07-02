@@ -10,15 +10,19 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.request.ChatNotificationDTO;
+import vn.hoidanit.jobhunter.domain.response.ResChatMessageDTO;
+import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.RestResponse;
 import vn.hoidanit.jobhunter.service.ChatMessageService;
 import vn.hoidanit.jobhunter.service.UserService;
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @RestController
 public class ChatController {
@@ -54,12 +58,18 @@ public class ChatController {
     }
 
     @GetMapping("/users-connected")
-    public ResponseEntity<RestResponse> findConnectedUsers(@RequestParam Long id) {
+    public ResponseEntity<List<ResUserDTO>> findConnectedUsers(@RequestParam("id") Long id) throws IdInvalidException {
+        // Lời gọi này bây giờ sẽ thực thi logic mới trong UserService
+        List<ResUserDTO> users = userService.findConnectedUsers(id);
 
-        RestResponse e = new RestResponse();
-        e.setData(userService.findConnectedUsers(id));
-        e.setStatusCode(HttpStatus.OK.value());
-        return ResponseEntity.ok(e);
+        // Logic kiểm tra null có thể không còn cần thiết nếu service luôn trả về một
+        // list (có thể rỗng)
+        if (users == null) {
+            // Hoặc bạn có thể trả về một list rỗng thay vì ném exception
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+
+        return ResponseEntity.ok().body(users);
     }
 
     @MessageMapping("/chat")
@@ -86,15 +96,12 @@ public class ChatController {
     }
 
     @GetMapping("/messages/{senderId}/{recipientId}")
-    public ResponseEntity<RestResponse> findChatMessages(
-            @PathVariable Long senderId,
-            @PathVariable Long recipientId) {
-        List<ChatMessage> chatList = chatMessageService.findChatMessages(senderId, recipientId);
-        RestResponse e = new RestResponse();
-        e.setData(chatList);
-        e.setStatusCode(HttpStatus.OK.value());
-        return ResponseEntity
-                .ok(e);
+    public ResponseEntity<List<ResChatMessageDTO>> findChatMessages(
+            @PathVariable("senderId") Long senderId,
+            @PathVariable("recipientId") Long recipientId) {
+        List<ResChatMessageDTO> chatList = chatMessageService.findChatMessages(senderId, recipientId);
+
+        return ResponseEntity.ok().body(chatList);
     }
 
 }

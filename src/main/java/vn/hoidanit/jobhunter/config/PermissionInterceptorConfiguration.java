@@ -25,7 +25,7 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 // chatting
                 "/chat",
                 "/messages/**",
-                "/users-connected",
+                "/users-connected/**",
                 "/user.disconnectUser",
                 "/user.addUser",
                 "/api/v1/comments/**",
