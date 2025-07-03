@@ -88,10 +88,19 @@ public class AuthController {
                     currentUserDB.getId(),
                     currentUserDB.getEmail(),
                     currentUserDB.getName(),
+                    currentUserDB.getGender(),
+                    currentUserDB.getAddress(),
+                    currentUserDB.getAge(),
+                    currentUserDB.getAvatar(),
+                    currentUserDB.isPublic(),
+
                     currentUserDB.getRole(),
                     currentUserDB.isVip(),
-                    currentUserDB.getCompany() != null ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(), currentUserDB.getCompany().getName()) : null
-            );
+
+                    currentUserDB.getCompany() != null
+                            ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(),
+                                    currentUserDB.getCompany().getName())
+                            : null);
             res.setUser(userLogin);
         }
 
@@ -158,13 +167,20 @@ public class AuthController {
             // Tạo response
             ResLoginDTO res = new ResLoginDTO();
             ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin(
-                    user.getId(), 
-                    user.getEmail(), 
-                    user.getName(), 
+                    user.getId(),
+                    user.getEmail(),
+                    user.getName(),
+                    user.getGender(),
+                    user.getAddress(),
+                    user.getAge(),
+                    user.getAvatar(),
+                    user.isPublic(),
                     user.getRole(),
                     user.isVip(),
-                    user.getCompany() != null ? new ResLoginDTO.UserLogin.CompanyUser(user.getCompany().getId(), user.getCompany().getName()) : null
-            );
+                    user.getCompany() != null
+                            ? new ResLoginDTO.UserLogin.CompanyUser(user.getCompany().getId(),
+                                    user.getCompany().getName())
+                            : null);
             res.setUser(userLogin);
 
             // Tạo access token
@@ -207,11 +223,18 @@ public class AuthController {
             userLogin.setId(currentUserDB.getId());
             userLogin.setEmail(currentUserDB.getEmail());
             userLogin.setName(currentUserDB.getName());
+            userLogin.setGender(currentUserDB.getGender());
+            userLogin.setAddress(currentUserDB.getAddress());
+            userLogin.setAge(currentUserDB.getAge());
+            userLogin.setAvatar(currentUserDB.getAvatar());
+            userLogin.setPublic(currentUserDB.isPublic());
+
             userLogin.setRole(currentUserDB.getRole());
             userLogin.setVip(currentUserDB.isVip());
-            userLogin.setCompany(currentUserDB.getCompany() != null 
-                ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(), currentUserDB.getCompany().getName()) 
-                : null);
+            userLogin.setCompany(currentUserDB.getCompany() != null
+                    ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(),
+                            currentUserDB.getCompany().getName())
+                    : null);
             userGetAccount.setUser(userLogin);
         }
 
@@ -243,10 +266,17 @@ public class AuthController {
                     currentUserDB.getId(),
                     currentUserDB.getEmail(),
                     currentUserDB.getName(),
+                    currentUserDB.getGender(),
+                    currentUserDB.getAddress(),
+                    currentUserDB.getAge(),
+                    currentUserDB.getAvatar(),
+                    currentUserDB.isPublic(),
                     currentUserDB.getRole(),
                     currentUserDB.isVip(),
-                    currentUserDB.getCompany() != null ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(), currentUserDB.getCompany().getName()) : null
-            );
+                    currentUserDB.getCompany() != null
+                            ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(),
+                                    currentUserDB.getCompany().getName())
+                            : null);
             res.setUser(userLogin);
         }
 
@@ -300,15 +330,17 @@ public class AuthController {
                 .body(null);
     }
 
-     /**
+    /**
      * Endpoint mới: Gửi OTP để xác thực email đăng ký.
      */
     @PostMapping("/auth/register/send-otp")
     @ApiMessage("Gửi mã OTP để đăng ký tài khoản")
-    public ResponseEntity<Void> sendRegistrationOtp(@Valid @RequestBody ReqSendOtpDTO sendOtpDTO) throws IdInvalidException {
+    public ResponseEntity<Void> sendRegistrationOtp(@Valid @RequestBody ReqSendOtpDTO sendOtpDTO)
+            throws IdInvalidException {
         // Kiểm tra xem email đã được đăng ký chưa
         if (userService.isEmailExist(sendOtpDTO.getEmail())) {
-            throw new IdInvalidException("Email " + sendOtpDTO.getEmail() + " đã tồn tại, vui lòng sử dụng email khác.");
+            throw new IdInvalidException(
+                    "Email " + sendOtpDTO.getEmail() + " đã tồn tại, vui lòng sử dụng email khác.");
         }
 
         // Tạo, lưu và gửi OTP
@@ -316,7 +348,7 @@ public class AuthController {
         otpService.saveOtp(sendOtpDTO.getEmail(), otpCode);
         // Gửi email với tiêu đề rõ ràng
         otpService.sendOtpEmail(sendOtpDTO.getEmail(), otpCode, "Mã OTP Đăng Ký Tài Khoản JobHunter");
-        
+
         return ResponseEntity.ok().build();
     }
 
@@ -325,13 +357,15 @@ public class AuthController {
      */
     @PostMapping("/auth/register")
     @ApiMessage("Register a new user")
-    public ResponseEntity<ResCreateUserDTO> register(@Valid @RequestBody ReqUserRegisterDTO registerDTO) throws IdInvalidException {
+    public ResponseEntity<ResCreateUserDTO> register(@Valid @RequestBody ReqUserRegisterDTO registerDTO)
+            throws IdInvalidException {
         // 1. Xác thực OTP có hợp lệ không
         otpService.validateOtp(registerDTO.getEmail(), registerDTO.getOtpCode());
 
         // 2. Kiểm tra lại sự tồn tại của email một lần nữa (đề phòng race condition)
         if (this.userService.isEmailExist(registerDTO.getEmail())) {
-            throw new IdInvalidException("Email " + registerDTO.getEmail() + " đã tồn tại, vui lòng sử dụng email khác.");
+            throw new IdInvalidException(
+                    "Email " + registerDTO.getEmail() + " đã tồn tại, vui lòng sử dụng email khác.");
         }
 
         // 3. Chuyển đổi DTO thành User entity
@@ -343,11 +377,11 @@ public class AuthController {
         user.setAge(registerDTO.getAge());
         user.setGender(registerDTO.getGender());
         user.setAddress(registerDTO.getAddress());
-        
-        // 4. Gọi service để tạo user. 
+
+        // 4. Gọi service để tạo user.
         // Phương thức handleCreateUser hiện tại sẽ bỏ qua việc set role nếu nó là null
         User newUser = this.userService.handleCreateUser(user);
-        
+
         return ResponseEntity.status(HttpStatus.CREATED).body(this.userService.convertToResCreateUserDTO(newUser));
     }
 

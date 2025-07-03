@@ -115,6 +115,16 @@ public class UserController {
         return ResponseEntity.ok(this.userService.convertToResUpdateUserDTO(nuUser));
     }
 
+    @PutMapping("/users/update-own-info")
+    @ApiMessage("Update your own user information")
+    public ResponseEntity<ResUpdateUserDTO> updateOwnInformation(@RequestBody User user) throws IdInvalidException {
+        // Gọi phương thức mới trong service để xử lý việc cập nhật
+        User updatedUser = this.userService.handleUpdateOwnUser(user);
+
+        // Chuyển đổi và trả về kết quả
+        return ResponseEntity.ok(this.userService.convertToResUpdateUserDTO(updatedUser));
+    }
+
     @PostMapping("/users/bulk-create")
     @ApiMessage("Create multiple users")
     public ResponseEntity<ResBulkCreateUserDTO> bulkCreateUsers(@Valid @RequestBody List<UserBulkCreateDTO> userDTOs) {

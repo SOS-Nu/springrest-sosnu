@@ -188,6 +188,57 @@ public class UserService {
         return currentUser;
     }
 
+    // ---------- START: PHƯƠNG THỨC MỚI ĐƯỢC THÊM VÀO ----------
+    /**
+     * Xử lý yêu cầu tự cập nhật thông tin của người dùng.
+     * Phương thức này kiểm tra xem người dùng đang đăng nhập có cố gắng cập nhật
+     * thông tin của chính họ hay không.
+     *
+     * @param reqUser Đối tượng User chứa thông tin cập nhật từ request.
+     * @return Đối tượng User đã được cập nhật.
+     * @throws IdInvalidException nếu người dùng không tồn tại hoặc không có quyền.
+     */
+    public User handleUpdateOwnUser(User reqUser) throws IdInvalidException {
+        // Bước 1: Lấy email của người dùng đang đăng nhập từ Security Context.
+        Optional<String> currentUserLoginOptional = SecurityUtil.getCurrentUserLogin();
+        if (currentUserLoginOptional.isEmpty()) {
+            throw new IdInvalidException("Không thể lấy thông tin người dùng đang đăng nhập.");
+        }
+        String currentUserEmail = currentUserLoginOptional.get();
+
+        // Bước 2: Tìm người dùng trong cơ sở dữ liệu bằng email.
+        User loggedInUser = this.userRepository.findByEmail(currentUserEmail);
+        if (loggedInUser == null) {
+            throw new IdInvalidException("Người dùng với email " + currentUserEmail + " không tồn tại.");
+        }
+
+        // Bước 3: **Kiểm tra quyền hạn quan trọng nhất**
+        // So sánh ID của người dùng đang đăng nhập với ID được gửi trong request body.
+        if (loggedInUser.getId() != reqUser.getId()) {
+            throw new IdInvalidException("Bạn không có quyền cập nhật thông tin của người dùng khác.");
+        }
+
+        // Bước 4: Nếu quyền hạn hợp lệ, tiến hành cập nhật thông tin.
+        // Lấy lại user từ DB để đảm bảo đang làm việc với đối tượng được quản lý bởi
+        // JPA.
+        User userToUpdate = this.fetchUserById(reqUser.getId());
+        if (userToUpdate == null) {
+            throw new IdInvalidException("User với id = " + reqUser.getId() + " không tồn tại");
+        }
+
+        // Chỉ cập nhật các trường thông tin cá nhân cơ bản.
+        // Không cho phép người dùng tự cập nhật Role hoặc Company qua API này.
+        userToUpdate.setName(reqUser.getName());
+        userToUpdate.setAge(reqUser.getAge());
+        userToUpdate.setGender(reqUser.getGender());
+        userToUpdate.setAddress(reqUser.getAddress());
+        userToUpdate.setAvatar(reqUser.getAvatar());
+
+        // Bước 5: Lưu và trả về người dùng đã được cập nhật.
+        return this.userRepository.save(userToUpdate);
+    }
+    // ---------- END: PHƯƠNG THỨC MỚI ĐƯỢC THÊM VÀO ----------
+
     public User handleGetUserByUsername(String username) {
         return this.userRepository.findByEmail(username);
     }
