@@ -60,6 +60,19 @@ public class CompanyService {
         dto.setFoundingYear(company.getFoundingYear());
         dto.setLocation(company.getLocation());
         dto.setCreatedAt(company.getCreatedAt());
+
+        // Lấy danh sách user thuộc công ty
+        List<User> users = this.userRepository.findByCompany(company);
+        if (users != null && !users.isEmpty()) {
+            // Giả sử chỉ lấy user đầu tiên làm đại diện (HR)
+            User hrUser = users.get(0);
+            ResFetchCompanyDTO.HrCompany hrCompany = new ResFetchCompanyDTO.HrCompany(
+                    hrUser.getId(),
+                    hrUser.getName(),
+                    hrUser.getEmail());
+            dto.setHrCompany(hrCompany);
+        }
+
         return dto;
     }
 
@@ -167,6 +180,7 @@ public class CompanyService {
         }
 
         Company company = companyOptional.get();
+        // Gọi convertToResFetchCompanyDTO đã được cập nhật
         ResFetchCompanyDTO dto = this.convertToResFetchCompanyDTO(company);
 
         // Fetch the active job count for this single company
@@ -176,6 +190,7 @@ public class CompanyService {
         return Optional.of(dto);
     }
 
+    // API FOR USER
     // API FOR USER
     @Transactional
     public ResCreateCompanyDTO createCompanyByUser(ReqCreateCompanyDTO reqCompany) throws IdInvalidException {

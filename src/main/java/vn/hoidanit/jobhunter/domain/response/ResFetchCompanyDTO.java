@@ -1,7 +1,10 @@
 package vn.hoidanit.jobhunter.domain.response;
 
 import java.time.Instant;
+
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
@@ -27,4 +30,17 @@ public class ResFetchCompanyDTO {
 
     // New field to hold the count of active jobs
     private long totalJobs;
+
+    private HrCompany hrCompany;
+
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class HrCompany {
+        private long id;
+        private String name;
+        private String email;
+    }
+
 }
