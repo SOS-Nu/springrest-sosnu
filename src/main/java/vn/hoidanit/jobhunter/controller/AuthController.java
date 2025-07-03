@@ -228,7 +228,6 @@ public class AuthController {
             userLogin.setAge(currentUserDB.getAge());
             userLogin.setAvatar(currentUserDB.getAvatar());
             userLogin.setPublic(currentUserDB.isPublic());
-
             userLogin.setRole(currentUserDB.getRole());
             userLogin.setVip(currentUserDB.isVip());
             userLogin.setCompany(currentUserDB.getCompany() != null
