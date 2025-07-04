@@ -76,7 +76,7 @@ public class User {
     @JoinColumn(name = "company_id")
     private Company company;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JsonIgnore
     List<Resume> resumes;
 

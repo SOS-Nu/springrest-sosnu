@@ -11,14 +11,17 @@ import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
 
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
-    List<ChatMessage> findByRoomName(String chatroomName);
+        List<ChatMessage> findByRoomName(String chatroomName);
 
-    // Cập nhật phương thức này bằng cách thêm @Param
-    @Query("SELECT m FROM ChatMessage m WHERE " +
-            "(m.sender.id = :senderId AND m.receiver.id = :recipientId) OR " +
-            "(m.sender.id = :recipientId AND m.receiver.id = :senderId) " +
-            "ORDER BY m.timeStamp ASC")
-    List<ChatMessage> findConversation(
-            @Param("senderId") Long senderId,
-            @Param("recipientId") Long recipientId);
+        // Cập nhật phương thức này bằng cách thêm @Param
+        @Query("SELECT m FROM ChatMessage m WHERE " +
+                        "(m.sender.id = :senderId AND m.receiver.id = :recipientId) OR " +
+                        "(m.sender.id = :recipientId AND m.receiver.id = :senderId) " +
+                        "ORDER BY m.timeStamp ASC")
+        List<ChatMessage> findConversation(
+                        @Param("senderId") Long senderId,
+                        @Param("recipientId") Long recipientId);
+
+        void deleteBySenderIdOrReceiverId(long senderId, long receiverId);
+
 }

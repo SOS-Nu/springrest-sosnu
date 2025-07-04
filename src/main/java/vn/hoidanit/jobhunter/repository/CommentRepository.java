@@ -8,4 +8,7 @@ import vn.hoidanit.jobhunter.domain.entity.Comment;
 
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long>, JpaSpecificationExecutor<Comment> {
+
+    void deleteByUserId(long userId);
+
 }

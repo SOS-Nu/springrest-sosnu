@@ -36,7 +36,9 @@ import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.file.ResUploadFileDTO;
+import vn.hoidanit.jobhunter.repository.ChatMessageRepository;
 import vn.hoidanit.jobhunter.repository.ChatRoomRepository;
+import vn.hoidanit.jobhunter.repository.CommentRepository;
 import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
@@ -56,10 +58,13 @@ public class UserService {
     private final ChatRoomRepository chatRoomRepository;
     private final FileService fileService;
     private final OnlineResumeService onlineResumeService;
+    private final CommentRepository commentRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
     public UserService(UserRepository userRepository, CompanyService companyService,
             RoleService roleService, PasswordEncoder passwordEncoder, RoleRepository roleRepository,
-            ChatRoomRepository chatRoomRepository, FileService fileService, OnlineResumeService onlineResumeService) {
+            ChatRoomRepository chatRoomRepository, FileService fileService, OnlineResumeService onlineResumeService,
+            ChatMessageRepository chatMessageRepository, CommentRepository commentRepository) {
         this.userRepository = userRepository;
         this.companyService = companyService;
         this.roleService = roleService;
@@ -68,6 +73,8 @@ public class UserService {
         this.chatRoomRepository = chatRoomRepository;
         this.fileService = fileService;
         this.onlineResumeService = onlineResumeService;
+        this.chatMessageRepository = chatMessageRepository;
+        this.commentRepository = commentRepository;
     }
 
     @Value("${hoidanit.upload-file.base-uri}")
@@ -128,7 +135,21 @@ public class UserService {
         return this.userRepository.save(user);
     }
 
+    @Transactional // Bắt buộc phải có để đảm bảo toàn vẹn giao dịch
     public void handleDeleteUser(long id) {
+        // Bước 1: Xóa các bản ghi con phức tạp (không thể cascade)
+        // Xóa tất cả tin nhắn mà user này là người gửi hoặc người nhận
+        this.commentRepository.deleteByUserId(id);
+
+        this.chatMessageRepository.deleteBySenderIdOrReceiverId(id, id);
+
+        // Xóa tất cả các phòng chat mà user này tham gia
+        this.chatRoomRepository.deleteBySenderIdOrReceiverId(id, id);
+
+        // Lưu ý: Bạn không cần gọi resumeRepository.delete... ở đây nữa
+        // vì CascadeType.ALL đã xử lý việc đó.
+
+        // Bước 2: Xóa người dùng sau khi tất cả các tham chiếu đã bị xóa
         this.userRepository.deleteById(id);
     }
 
