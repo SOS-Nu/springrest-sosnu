@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import vn.hoidanit.jobhunter.domain.entity.Company;
+import vn.hoidanit.jobhunter.domain.response.ResLoginDTO.UserLogin.CompanyUser;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
@@ -42,6 +43,17 @@ public class ResUserDTO {
     public static class CompanyUser {
         private long id;
         private String name;
+        private String description;
+        private String address;
+
+        private String logo;
+
+        private String field;
+        private String website;
+        private String scale;
+        private String country;
+        private int foundingYear;
+        private String location;
     }
 
     @Getter
@@ -52,4 +64,5 @@ public class ResUserDTO {
         private long id;
         private String name;
     }
+
 }

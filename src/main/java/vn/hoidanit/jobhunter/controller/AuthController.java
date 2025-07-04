@@ -98,8 +98,18 @@ public class AuthController {
                     currentUserDB.isVip(),
 
                     currentUserDB.getCompany() != null
-                            ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(),
-                                    currentUserDB.getCompany().getName())
+                            ? new ResLoginDTO.UserLogin.CompanyUser(
+                                    currentUserDB.getCompany().getId(),
+                                    currentUserDB.getCompany().getName(),
+                                    currentUserDB.getCompany().getDescription(),
+                                    currentUserDB.getCompany().getAddress(),
+                                    currentUserDB.getCompany().getLogo(),
+                                    currentUserDB.getCompany().getField(),
+                                    currentUserDB.getCompany().getWebsite(),
+                                    currentUserDB.getCompany().getScale(),
+                                    currentUserDB.getCompany().getCountry(),
+                                    currentUserDB.getCompany().getFoundingYear(),
+                                    currentUserDB.getCompany().getLocation())
                             : null);
             res.setUser(userLogin);
         }
@@ -178,8 +188,18 @@ public class AuthController {
                     user.getRole(),
                     user.isVip(),
                     user.getCompany() != null
-                            ? new ResLoginDTO.UserLogin.CompanyUser(user.getCompany().getId(),
-                                    user.getCompany().getName())
+                            ? new ResLoginDTO.UserLogin.CompanyUser(
+                                    user.getCompany().getId(),
+                                    user.getCompany().getName(),
+                                    user.getCompany().getDescription(),
+                                    user.getCompany().getAddress(),
+                                    user.getCompany().getLogo(),
+                                    user.getCompany().getField(),
+                                    user.getCompany().getWebsite(),
+                                    user.getCompany().getScale(),
+                                    user.getCompany().getCountry(),
+                                    user.getCompany().getFoundingYear(),
+                                    user.getCompany().getLocation())
                             : null);
             res.setUser(userLogin);
 
@@ -231,8 +251,18 @@ public class AuthController {
             userLogin.setRole(currentUserDB.getRole());
             userLogin.setVip(currentUserDB.isVip());
             userLogin.setCompany(currentUserDB.getCompany() != null
-                    ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(),
-                            currentUserDB.getCompany().getName())
+                    ? new ResLoginDTO.UserLogin.CompanyUser(
+                            currentUserDB.getCompany().getId(),
+                            currentUserDB.getCompany().getName(),
+                            currentUserDB.getCompany().getDescription(),
+                            currentUserDB.getCompany().getAddress(),
+                            currentUserDB.getCompany().getLogo(),
+                            currentUserDB.getCompany().getField(),
+                            currentUserDB.getCompany().getWebsite(),
+                            currentUserDB.getCompany().getScale(),
+                            currentUserDB.getCompany().getCountry(),
+                            currentUserDB.getCompany().getFoundingYear(),
+                            currentUserDB.getCompany().getLocation())
                     : null);
             userGetAccount.setUser(userLogin);
         }
@@ -273,8 +303,18 @@ public class AuthController {
                     currentUserDB.getRole(),
                     currentUserDB.isVip(),
                     currentUserDB.getCompany() != null
-                            ? new ResLoginDTO.UserLogin.CompanyUser(currentUserDB.getCompany().getId(),
-                                    currentUserDB.getCompany().getName())
+                            ? new ResLoginDTO.UserLogin.CompanyUser(
+                                    currentUserDB.getCompany().getId(),
+                                    currentUserDB.getCompany().getName(),
+                                    currentUserDB.getCompany().getDescription(),
+                                    currentUserDB.getCompany().getAddress(),
+                                    currentUserDB.getCompany().getLogo(),
+                                    currentUserDB.getCompany().getField(),
+                                    currentUserDB.getCompany().getWebsite(),
+                                    currentUserDB.getCompany().getScale(),
+                                    currentUserDB.getCompany().getCountry(),
+                                    currentUserDB.getCompany().getFoundingYear(),
+                                    currentUserDB.getCompany().getLocation())
                             : null);
             res.setUser(userLogin);
         }

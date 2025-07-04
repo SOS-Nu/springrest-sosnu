@@ -40,6 +40,17 @@ public class ResLoginDTO {
         public static class CompanyUser {
             private long id;
             private String name;
+            private String description;
+            private String address;
+
+            private String logo;
+
+            private String field;
+            private String website;
+            private String scale;
+            private String country;
+            private int foundingYear;
+            private String location;
         }
     }
 
