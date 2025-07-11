@@ -88,6 +88,7 @@ public class ChatController {
         chatNotification.setContent(savedMsg.getContent());
         chatNotification.setReceiverId(savedMsg.getReceiver().getId());
         chatNotification.setSenderId(savedMsg.getSender().getId());
+        chatNotification.setTimeStamp(savedMsg.getTimeStamp());
 
         messagingTemplate.convertAndSendToUser(
                 chatMessage.getReceiver().getEmail(),

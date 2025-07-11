@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
 import vn.hoidanit.jobhunter.domain.entity.ChatRoom;
 import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.OnlineResume;
@@ -35,6 +36,7 @@ import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.domain.response.chat.ResLastMessageDTO;
 import vn.hoidanit.jobhunter.domain.response.file.ResUploadFileDTO;
 import vn.hoidanit.jobhunter.repository.ChatMessageRepository;
 import vn.hoidanit.jobhunter.repository.ChatRoomRepository;
@@ -447,53 +449,36 @@ public class UserService {
         List<ChatRoom> chatRooms = this.chatRoomRepository.findBySenderIdOrReceiverId(userId, userId);
 
         // B2: Từ các phòng chat, trích xuất ID của người dùng còn lại (partner).
-        // Sử dụng Set để đảm bảo mỗi ID chỉ xuất hiện một lần.
-        // B2: Từ các phòng chat, trích xuất ID của người dùng còn lại (partner).
-        // Sử dụng Set để đảm bảo mỗi ID chỉ xuất hiện một lần.
         Set<Long> partnerIds = chatRooms.stream()
-                .map(chatRoom -> chatRoom.getSender().getId() == userId // Dòng đã được sửa
+                .map(chatRoom -> chatRoom.getSender().getId() == userId
                         ? chatRoom.getReceiver().getId()
                         : chatRoom.getSender().getId())
                 .collect(Collectors.toSet());
 
         // B3: Dựa vào danh sách ID partners, truy vấn thông tin User đầy đủ.
-        // Giả sử bạn có phương thức findAllById trong UserRepository.
         List<User> connectedUsers = this.userRepository.findAllById(partnerIds);
 
-        // B4: Chuyển đổi danh sách User entity sang danh sách ResUserDTO.
-        // Giả sử ResUserDTO có một phương thức chuyển đổi tương tự.
+        // B4: Chuyển đổi User entity sang ResUserDTO và thêm tin nhắn cuối cùng
         return connectedUsers.stream()
                 .map(user -> {
-                    ResUserDTO dto = new ResUserDTO();
+                    ResUserDTO dto = this.convertToResUserDTO(user); // Dùng lại hàm convert đã có
 
-                    // 1. Map các trường luôn có giá trị
-                    dto.setId(user.getId());
-                    dto.setName(user.getName());
-                    dto.setEmail(user.getEmail());
-                    dto.setAvatar(user.getAvatar());
-                    dto.setAge(user.getAge());
-                    dto.setStatus(user.getStatus());
-                    // ... các trường khác của User
+                    // TÌM TIN NHẮN CUỐI CÙNG
+                    ChatMessage lastMsgEntity = this.chatMessageRepository.findLastMessageBetweenUsers(userId,
+                            user.getId());
 
-                    // 2. KIỂM TRA NULL TRƯỚC KHI XỬ LÝ COMPANY
-                    if (user.getCompany() != null) {
-                        Company companyEntity = user.getCompany();
-                        ResUserDTO.CompanyUser companyDTO = new ResUserDTO.CompanyUser();
-                        companyDTO.setId(companyEntity.getId());
-                        companyDTO.setName(companyEntity.getName());
-                        dto.setCompany(companyDTO);
-                    }
-
-                    // cach 2
-                    if (user.getRole() != null) {
-                        dto.setRole(new ResUserDTO.RoleUser(
-                                user.getRole().getId(),
-                                user.getRole().getName()));
+                    if (lastMsgEntity != null) {
+                        ResLastMessageDTO lastMsgDto = new ResLastMessageDTO(
+                                lastMsgEntity.getContent(),
+                                lastMsgEntity.getSender().getId(),
+                                lastMsgEntity.getTimeStamp().toInstant() // Chuyển Date sang Instant
+                        );
+                        dto.setLastMessage(lastMsgDto);
                     }
 
                     return dto;
                 })
-                .collect(Collectors.toList()); // Đừng quên bước thu thập kết quả
+                .collect(Collectors.toList());
     }
 
     public void updateStatus(User userPayload) {
