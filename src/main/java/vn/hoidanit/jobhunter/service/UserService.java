@@ -334,6 +334,8 @@ public class UserService {
         res.setGender(user.getGender());
         res.setAddress(user.getAddress());
         res.setAvatar(user.getAvatar());
+        res.setStatus(user.getStatus());
+
         return res;
     }
 
