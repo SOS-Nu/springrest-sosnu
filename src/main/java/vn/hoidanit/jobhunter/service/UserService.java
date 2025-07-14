@@ -512,6 +512,10 @@ public class UserService {
         }
     }
 
+    public List<User> findAllOnlineUsers() {
+        return this.userRepository.findByStatus(UserStatusEnum.ONLINE);
+    }
+
     public User findUserById(Long id) {
         return this.userRepository.findById(id).get();
     }

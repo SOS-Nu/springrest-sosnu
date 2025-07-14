@@ -24,4 +24,6 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     List<User> findAllByStatusAndIdNot(UserStatusEnum status, Long id);
 
+    List<User> findByStatus(UserStatusEnum status);
+
 }
