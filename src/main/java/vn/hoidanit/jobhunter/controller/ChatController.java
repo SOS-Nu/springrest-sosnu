@@ -10,6 +10,8 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,8 +23,21 @@ import vn.hoidanit.jobhunter.domain.response.ResChatMessageDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.domain.response.RestResponse;
 import vn.hoidanit.jobhunter.service.ChatMessageService;
+import vn.hoidanit.jobhunter.service.HeartbeatService;
 import vn.hoidanit.jobhunter.service.UserService;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+
+class PingPayload {
+    private String email;
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+}
 
 @RestController
 public class ChatController {
@@ -30,14 +45,16 @@ public class ChatController {
     private final UserService userService;
     private final ChatMessageService chatMessageService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final HeartbeatService heartbeatService; // << INJECT SERVICE
 
     public ChatController(
             UserService userService,
             ChatMessageService chatMessageService,
-            SimpMessagingTemplate messagingTemplate) {
+            SimpMessagingTemplate messagingTemplate, HeartbeatService heartbeatService) {
         this.userService = userService;
         this.chatMessageService = chatMessageService;
         this.messagingTemplate = messagingTemplate;
+        this.heartbeatService = heartbeatService;
     }
 
     // update status online/ offline
@@ -55,6 +72,13 @@ public class ChatController {
             @Payload User user) {
         userService.disconnect(user);
         return user;
+    }
+
+    @MessageMapping("/heartbeat.ping")
+    public void handlePing(@Payload PingPayload payload) {
+        if (payload != null && payload.getEmail() != null) {
+            heartbeatService.ping(payload.getEmail());
+        }
     }
 
     @GetMapping("/users-connected")

@@ -27,6 +27,7 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 "/messages/**",
                 "/users-connected/**",
                 "/user.disconnectUser",
+                "/heartbeat.ping",
                 "/user.addUser",
                 "/api/v1/comments/**",
                 "/api/v1/users/main-resume",
