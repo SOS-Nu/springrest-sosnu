@@ -16,16 +16,20 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
 import vn.hoidanit.jobhunter.domain.entity.Job;
+import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.response.ResCandidateWithScoreDTO;
 import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.domain.response.ai.ResCvEvaluationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResFindJobsDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResJobWithScoreDTO;
 import vn.hoidanit.jobhunter.repository.JobRepository;
+import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
@@ -45,6 +49,7 @@ public class GeminiService {
     private final ObjectMapper objectMapper;
     private final JobRepository jobRepository; // THÊM REPOSITORY NÀY
     private final JobService jobService; // THÊM SERVICE NÀY
+    private final UserRepository userRepository;
 
     @Value("${gemini.api.key}")
     private String geminiApiKey;
@@ -53,13 +58,15 @@ public class GeminiService {
     private String geminiApiUrl;
 
     public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService,
-            ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService) {
+            ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService,
+            UserRepository userRepository) {
         this.restTemplate = restTemplate;
         this.userService = userService;
         this.fileService = fileService;
         this.objectMapper = objectMapper;
         this.jobRepository = jobRepository;
         this.jobService = jobService;
+        this.userRepository = userRepository;
     }
 
     public ResFindCandidatesDTO findCandidates(String jobDescription) throws IdInvalidException {
@@ -434,6 +441,159 @@ public class GeminiService {
             System.err.println("Error calling Gemini API for finding jobs: " + e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    // PHƯƠNG THỨC MỚI CỐT LÕI
+    public ResCvEvaluationDTO evaluateCandidateCv(MultipartFile cvFile, String language)
+            throws IdInvalidException, IOException {
+        // 1. Lấy thông tin người dùng hiện tại
+        String email = SecurityUtil.getCurrentUserLogin().orElseThrow(() -> new IdInvalidException("User not found"));
+        User currentUser = this.userRepository.findByEmail(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("User not found with email: " + email);
+        }
+
+        // 2. Lấy nội dung CV
+        String cvAsText;
+        if (cvFile != null && !cvFile.isEmpty()) {
+            // Trường hợp 1: User tải file lên
+            cvAsText = fileService.extractTextFromBytes(cvFile.getBytes());
+        } else {
+            // Trường hợp 2: Dùng online resume
+            cvAsText = buildTextFromOnlineResume(currentUser);
+        }
+
+        if (cvAsText == null || cvAsText.trim().isEmpty()) {
+            throw new IOException("CV content is empty or could not be extracted.");
+        }
+
+        // 3. Lấy danh sách công việc từ DB
+        // Lấy 100 job mới nhất đang active để AI tham khảo
+        Pageable pageable = PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Specification<Job> spec = (root, query, cb) -> cb.isTrue(root.get("active"));
+        List<Job> recentJobs = this.jobRepository.findAll(spec, pageable).getContent();
+
+        // Convert jobs to a simplified JSON string
+        String jobsJson = convertJobsToJson(recentJobs);
+
+        // 4. Xây dựng Prompt chi tiết cho Gemini
+        String prompt = buildCvEvaluationPrompt(cvAsText, jobsJson, language);
+
+        // 5. Gọi API Gemini
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            List<Map<String, Object>> parts = new ArrayList<>();
+            parts.add(Map.of("text", prompt));
+
+            Map<String, Object> content = Map.of("parts", parts);
+            Map<String, Object> requestBody = Map.of("contents", Collections.singletonList(content));
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            String url = geminiApiUrl + "?key=" + geminiApiKey;
+            String response = restTemplate.postForObject(url, entity, String.class);
+
+            // 6. Parse kết quả và trả về
+            JsonNode root = objectMapper.readTree(response);
+            String textResponse = root.path("candidates").get(0).path("content").path("parts").get(0).path("text")
+                    .asText();
+            String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
+
+            return objectMapper.readValue(cleanedJson, ResCvEvaluationDTO.class);
+
+        } catch (Exception e) {
+            System.err.println("Error calling Gemini API for CV evaluation: " + e.getMessage());
+            // Có thể throw một exception tùy chỉnh ở đây
+            throw new IOException("Failed to get response from AI service.", e);
+        }
+    }
+
+    // Hàm helper để tạo nội dung text từ Online Resume
+    private String buildTextFromOnlineResume(User user) {
+        if (user.getOnlineResume() == null)
+            return "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Title: ").append(user.getOnlineResume().getTitle()).append("\n");
+        sb.append("Full Name: ").append(user.getOnlineResume().getFullName()).append("\n");
+        sb.append("Email: ").append(user.getOnlineResume().getEmail()).append("\n");
+        sb.append("Phone: ").append(user.getOnlineResume().getPhone()).append("\n");
+        sb.append("Address: ").append(user.getOnlineResume().getAddress()).append("\n\n");
+
+        sb.append("Summary:\n").append(user.getOnlineResume().getSummary()).append("\n\n");
+
+        sb.append("Skills:\n");
+        user.getOnlineResume().getSkills().forEach(skill -> sb.append("- ").append(skill.getName()).append("\n"));
+        sb.append("\n");
+
+        if (user.getWorkExperiences() != null && !user.getWorkExperiences().isEmpty()) {
+            sb.append("Work Experience:\n");
+            user.getWorkExperiences().forEach(exp -> {
+                sb.append("- Company: ").append(exp.getCompanyName()).append("\n");
+                sb.append("  Duration: ").append(exp.getStartDate()).append(" to ").append(exp.getEndDate())
+                        .append("\n");
+                sb.append("  Description: ").append(exp.getDescription()).append("\n\n");
+            });
+        }
+
+        return sb.toString();
+    }
+
+    // Hàm helper để convert danh sách Job thành chuỗi JSON đơn giản
+    private String convertJobsToJson(List<Job> jobs) {
+        List<Map<String, Object>> simplifiedJobs = jobs.stream().map(job -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("jobId", job.getId());
+            map.put("jobTitle", job.getName());
+            map.put("companyName", job.getCompany() != null ? job.getCompany().getName() : "N/A");
+            map.put("requiredSkills", job.getSkills().stream().map(s -> s.getName()).collect(Collectors.toList()));
+            map.put("description", job.getDescription());
+            map.put("level", job.getLevel());
+            return map;
+        }).collect(Collectors.toList());
+
+        try {
+            return objectMapper.writeValueAsString(simplifiedJobs);
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
+    // Hàm helper quan trọng nhất: tạo prompt
+    private String buildCvEvaluationPrompt(String cvText, String jobsJson, String language) {
+        // Logic để tạo chỉ thị ngôn ngữ dựa trên tham số 'language'
+        String languageInstruction = language.equalsIgnoreCase("en")
+                ? "You must provide the entire response in English. All keys and values in the JSON must be in English."
+                : "Bạn phải cung cấp toàn bộ phản hồi bằng Tiếng Việt. Mọi khóa và giá trị trong JSON phải là Tiếng Việt.";
+
+        String marketContext = language.equalsIgnoreCase("en")
+                ? "the Vietnamese IT market"
+                : "thị trường IT Việt Nam";
+
+        // Xây dựng prompt hoàn chỉnh
+        return "You are an expert HR and career advisor for " + marketContext + ". "
+        // Thêm chỉ thị ngôn ngữ vào ngay đầu prompt
+                + languageInstruction + " "
+                + "Analyze the following CV. "
+                + "Provide a comprehensive evaluation in a single, valid JSON object. The JSON object must have the exact following structure: "
+                + "{\"overallScore\": number, \"summary\": string, \"strengths\": string[], \"improvements\": [{\"area\": string, \"suggestion\": string}], \"estimatedSalaryRange\": string, \"suggestedRoadmap\": [{\"step\": number, \"action\": string, \"reason\": string}], \"relevantJobs\": [{\"jobId\": number, \"jobTitle\": string, \"companyName\": string, \"matchReason\": string}]}. "
+                + "\n\nHere are the evaluation criteria:"
+                + "\n1.  **overallScore**: An integer score from 0 to 100 based on clarity, experience, skills, and suitability for the current job market."
+                + "\n2.  **summary**: A short, professional summary of the candidate's profile in 2-3 sentences."
+                + "\n3.  **strengths**: An array of strings highlighting the candidate's key strengths (e.g., 'Strong experience in microservices architecture', 'Proficient with React and state management')."
+                + "\n4.  **improvements**: An array of objects. For each object, 'area' is the section to improve (e.g., 'Project Descriptions', 'Skills Section') and 'suggestion' is a concrete action (e.g., 'Quantify achievements with metrics like 20% performance improvement', 'Add soft skills like teamwork and problem-solving')."
+                + "\n5.  **estimatedSalaryRange**: A string representing the estimated appropriate monthly salary range in VND (e.g., '35,000,000 - 45,000,000 VND'). Base this on the skills, experience, and current market rates in Vietnam."
+                + "\n6.  **suggestedRoadmap**: A personalized roadmap with 3-5 steps. For each step, 'action' is what to learn or do, and 'reason' explains how it helps them achieve a higher level job or salary."
+                + "\n7.  **relevantJobs**: Analyze the list of available jobs provided below. Select the 3-5 most suitable jobs for this candidate. For each, provide 'jobId', 'jobTitle', 'companyName', and a 'matchReason' explaining why it's a good fit."
+                + "\n\n---"
+                + "\n**CANDIDATE'S CV TEXT:**\n"
+                + cvText
+                + "\n\n---"
+                + "\n**AVAILABLE JOBS FOR REFERENCE:**\n"
+                + jobsJson
+                + "\n\n---"
+                + "\n**RESPONSE (valid JSON object only, no extra text or markdown):**";
     }
 
     // Helper class để parse response

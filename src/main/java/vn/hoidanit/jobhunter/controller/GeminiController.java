@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
+import vn.hoidanit.jobhunter.domain.response.ai.ResCvEvaluationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResFindJobsDTO;
 import vn.hoidanit.jobhunter.service.FileService;
 import vn.hoidanit.jobhunter.service.GeminiService;
@@ -65,4 +66,15 @@ public class GeminiController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/evaluate-cv")
+    public ResponseEntity<ResCvEvaluationDTO> evaluateCv(
+            @RequestParam(value = "cvFile", required = false) MultipartFile cvFile,
+            // <<< THÊM THAM SỐ NGÔN NGỮ >>>
+            @RequestParam(value = "language", defaultValue = "vi") String language)
+            throws IdInvalidException, IOException {
+
+        // Truyền tham số ngôn ngữ vào service
+        ResCvEvaluationDTO result = this.geminiService.evaluateCandidateCv(cvFile, language);
+        return ResponseEntity.ok(result);
+    }
 }
