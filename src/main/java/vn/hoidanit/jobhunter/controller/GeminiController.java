@@ -1,5 +1,6 @@
 package vn.hoidanit.jobhunter.controller;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,28 +45,24 @@ public class GeminiController {
         return ResponseEntity.ok(result);
     }
 
-      /**
-     * ENDPOINT MỚI: Tìm công việc phù hợp cho ứng viên.
-     */
     @PostMapping("/find-jobs")
     @ApiMessage("Tìm công việc phù hợp dựa trên CV hoặc kỹ năng")
     public ResponseEntity<ResFindJobsDTO> findJobs(
             @RequestParam(name = "skillsDescription", required = false) String skillsDescription,
-            @RequestParam(name = "file", required = false) MultipartFile file) throws IdInvalidException, IOException {
-        
-        byte[] cvFileBytes = null;
-        String cvFileName = null;
+            @RequestParam(name = "file", required = false) MultipartFile file,
+            Pageable pageable) throws IdInvalidException, IOException { // <= THÊM PAGEABLE
 
-        if (file != null && !file.isEmpty()) {
-            cvFileBytes = file.getBytes();
-            cvFileName = file.getOriginalFilename();
-        }
+        byte[] cvFileBytes = (file != null && !file.isEmpty()) ? file.getBytes() : null;
+        String cvFileName = (file != null && !file.isEmpty()) ? file.getOriginalFilename() : null;
 
         if ((skillsDescription == null || skillsDescription.trim().isEmpty()) && cvFileBytes == null) {
             throw new IdInvalidException("Vui lòng cung cấp mô tả kỹ năng hoặc tải lên file CV.");
         }
 
-        ResFindJobsDTO result = geminiService.findJobsForCandidate(skillsDescription, cvFileBytes, cvFileName);
+        // Truyền pageable vào service
+        ResFindJobsDTO result = geminiService.findJobsForCandidate(skillsDescription, cvFileBytes, cvFileName,
+                pageable);
         return ResponseEntity.ok(result);
     }
+
 }

@@ -1,5 +1,8 @@
 package vn.hoidanit.jobhunter.util;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -196,5 +199,32 @@ public class SecurityUtil {
     // private static Stream<String> getAuthorities(Authentication authentication) {
     //     return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority);
     // }
+
+
+    /**
+     * PHƯƠNG THỨC MỚI ĐƯỢC THÊM VÀO
+     * Băm một chuỗi đầu vào sử dụng thuật toán MD5.
+     * Dùng để tạo cache key nhất quán.
+     * * @param input Chuỗi cần băm.
+     * @return Chuỗi đã được băm dưới dạng hex.
+     */
+    public static String hash(String input) {
+        if (input == null) {
+            return "";
+        }
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] hashInBytes = md.digest(input.getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hashInBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            // Trong thực tế, MD5 luôn tồn tại. Exception này khó xảy ra.
+            throw new RuntimeException("Không thể tìm thấy thuật toán MD5", e);
+        }
+    }
 
 }

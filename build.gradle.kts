@@ -40,6 +40,8 @@ dependencies {
 	implementation("com.google.api-client:google-api-client:2.7.0")
 	implementation("org.apache.tika:tika-core:2.9.1")
     implementation("org.apache.tika:tika-parsers-standard-package:2.9.1")
+	implementation("org.liquibase:liquibase-core")
+
 
 
 }

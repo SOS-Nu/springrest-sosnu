@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -25,6 +26,7 @@ import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResFindJobsDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResJobWithScoreDTO;
 import vn.hoidanit.jobhunter.repository.JobRepository;
+import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 import java.io.IOException;
@@ -260,56 +262,116 @@ public class GeminiService {
     }
 
     public ResFindJobsDTO findJobsForCandidate(
-            String skillsDescription, byte[] cvFileBytes, String cvFileName) throws IdInvalidException {
+            String skillsDescription, byte[] cvFileBytes, String cvFileName, Pageable pageable)
+            throws IdInvalidException, IOException {
 
-        List<ResJobWithScoreDTO> suitableJobs = new ArrayList<>();
-        ResultPaginationDTO.Meta lastMeta = null;
-        int currentPage = 0;
-        final int PAGE_SIZE = 200;
-        final int TARGET_JOBS = 10;
+        final int PRE_FILTER_LIMIT = 200; // Lọc sơ bộ lấy 150 jobs tiềm năng nhất
 
-        // TẠO SPECIFICATION ĐỂ LỌC CÁC JOB CÓ 'active = true'
-        Specification<Job> spec = (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("active"), true);
+        // Tạo cache key từ nội dung yêu cầu
+        String cvTextForCache = (cvFileBytes != null) ? fileService.extractTextFromBytes(cvFileBytes) : "";
+        String cacheKey = "find_jobs:" + SecurityUtil.hash(cvTextForCache + skillsDescription);
 
-        while (suitableJobs.size() < TARGET_JOBS) {
-            Pageable pageable = PageRequest.of(currentPage, PAGE_SIZE);
+        // Cache cache = cacheManager.getCache("jobMatches");
+        // List<ResJobWithScoreDTO> allRankedJobs = cache.get(cacheKey, List.class);
+        List<ResJobWithScoreDTO> allRankedJobs = null; // Giả sử chưa có cache
 
-            // SỬ DỤNG SPECIFICATION KHI TRUY VẤN DATABASE
-            Page<Job> paginatedJobs = jobRepository.findAll(spec, pageable);
+        if (allRankedJobs == null) {
+            // === GIAI ĐOẠN 1: LỌC SƠ BỘ CÁC JOB ĐANG ACTIVE ===
+            Set<String> keywords = extractKeywords(cvTextForCache, skillsDescription);
+            List<Job> potentialJobs = preFilterActiveJobs(keywords, PRE_FILTER_LIMIT);
 
-            // Luôn cập nhật meta cho trang hiện tại để đảm bảo không bị null
-            lastMeta = new ResultPaginationDTO.Meta();
-            lastMeta.setPage(paginatedJobs.getNumber() + 1);
-            lastMeta.setPageSize(paginatedJobs.getSize());
-            lastMeta.setPages(paginatedJobs.getTotalPages());
-            lastMeta.setTotal(paginatedJobs.getTotalElements());
-
-            if (paginatedJobs.getContent().isEmpty()) {
-                break; // Hết công việc để kiểm tra
+            if (potentialJobs.isEmpty()) {
+                return new ResFindJobsDTO(Collections.emptyList(), new ResultPaginationDTO.Meta());
             }
 
-            List<Job> currentJobs = paginatedJobs.getContent();
-            Map<Long, Job> jobMap = currentJobs.stream()
+            // === GIAI ĐOẠN 2: CHẤM ĐIỂM BẰNG AI ===
+            List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(
+                    skillsDescription, cvFileBytes, cvFileName, potentialJobs);
+
+            Map<Long, Job> jobMap = potentialJobs.stream()
                     .collect(Collectors.toMap(Job::getId, Function.identity()));
 
-            List<GeminiJobScoreResponse> rankedJobs = rankJobsWithGemini(
-                    skillsDescription, cvFileBytes, cvFileName, currentJobs);
-
-            for (GeminiJobScoreResponse rankedJob : rankedJobs) {
-                if (suitableJobs.size() >= TARGET_JOBS)
-                    break;
-
+            allRankedJobs = new ArrayList<>();
+            for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
                 Job jobDetail = jobMap.get(rankedJob.getJobId());
                 if (jobDetail != null) {
                     ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
-                    suitableJobs.add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
+                    allRankedJobs.add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
                 }
             }
-            currentPage++;
+
+            allRankedJobs.sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
+
+            // Lưu vào cache
+            // cache.put(cacheKey, allRankedJobs);
+            System.out.println("LOG: Đã gọi AI và có thể lưu kết quả vào cache với key: " + cacheKey);
+        } else {
+            System.out.println("LOG: Đã tìm thấy kết quả trong cache với key: " + cacheKey);
         }
 
-        suitableJobs.sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
-        return new ResFindJobsDTO(suitableJobs, lastMeta);
+        // === PHÂN TRANG KẾT QUẢ TRẢ VỀ ===
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), allRankedJobs.size());
+
+        List<ResJobWithScoreDTO> paginatedResult = (start >= allRankedJobs.size())
+                ? Collections.emptyList()
+                : allRankedJobs.subList(start, end);
+
+        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
+        meta.setPage(pageable.getPageNumber() + 1);
+        meta.setPageSize(pageable.getPageSize());
+        meta.setPages((int) Math.ceil((double) allRankedJobs.size() / pageable.getPageSize()));
+        meta.setTotal(allRankedJobs.size());
+
+        return new ResFindJobsDTO(paginatedResult, meta);
+    }
+
+    /**
+     * Helper method để lọc sơ bộ các job đang active bằng FTS và tìm theo skill.
+     */
+    private List<Job> preFilterActiveJobs(Set<String> keywords, int limit) {
+        if (keywords.isEmpty()) {
+            // Nếu không có keyword, lấy các jobs active mới nhất
+            return jobRepository.findAll(
+                    (root, query, cb) -> cb.isTrue(root.get("active")),
+                    PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
+        }
+
+        String keywordString = String.join(" ", keywords);
+
+        // 1. Lấy kết quả từ Full-Text Search (đã có điều kiện active=true)
+        List<Job> ftsResults = jobRepository.searchActiveByKeywordsNative(keywordString, limit);
+
+        // 2. Lấy kết quả từ tìm kiếm Skill (đã có điều kiện active=true)
+        List<Job> skillResults = jobRepository.findActiveBySkillNames(keywords);
+
+        // 3. Gộp kết quả và loại bỏ trùng lặp
+        // Dùng LinkedHashMap để giữ thứ tự ưu tiên của FTS và loại bỏ trùng lặp
+        Map<Long, Job> combinedResults = new LinkedHashMap<>();
+        ftsResults.forEach(job -> combinedResults.put(job.getId(), job));
+        skillResults.forEach(job -> combinedResults.putIfAbsent(job.getId(), job));
+
+        return combinedResults.values().stream().limit(limit).collect(Collectors.toList());
+    }
+
+    /**
+     * Helper method để trích xuất keywords từ CV và mô tả.
+     */
+    private Set<String> extractKeywords(String cvText, String skillsDescription) {
+        Set<String> keywords = new HashSet<>();
+        String combinedText = (cvText != null ? cvText : "") + " "
+                + (skillsDescription != null ? skillsDescription : "");
+        if (combinedText.trim().isEmpty())
+            return keywords;
+
+        String[] words = combinedText.toLowerCase().split("[\\s,;\\n\\t()./]+");
+        for (String word : words) {
+            // Lọc bỏ các từ quá ngắn hoặc không có nghĩa
+            if (word.length() > 1 && word.matches("[a-z0-9+#-]*[a-z0-9]")) {
+                keywords.add(word);
+            }
+        }
+        return keywords;
     }
 
     /**
