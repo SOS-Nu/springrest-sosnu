@@ -29,6 +29,7 @@ public class ResUserDTO {
 
     private Instant updatedAt;
     private Instant createdAt;
+    private boolean isVip;
 
     private CompanyUser company;
 

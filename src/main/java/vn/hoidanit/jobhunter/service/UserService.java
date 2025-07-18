@@ -194,6 +194,7 @@ public class UserService {
             currentUser.setAge(reqUser.getAge());
             currentUser.setName(reqUser.getName());
             currentUser.setAvatar(reqUser.getAvatar());
+            currentUser.setVip(reqUser.isVip());
 
             if (reqUser.getCompany() != null) {
                 Optional<Company> companyOptional = this.companyService.findById(reqUser.getCompany().getId());
@@ -282,11 +283,13 @@ public class UserService {
         res.setGender(user.getGender());
         res.setAddress(user.getAddress());
         res.setAvatar(user.getAvatar());
+        res.setVip(user.isVip());
         if (user.getCompany() != null) {
             com.setId(user.getCompany().getId());
             com.setName(user.getCompany().getName());
             res.setCompany(com);
         }
+
         return res;
     }
 
@@ -305,6 +308,8 @@ public class UserService {
         res.setGender(user.getGender());
         res.setAddress(user.getAddress());
         res.setAvatar(user.getAvatar());
+        res.setVip(user.isVip());
+
         return res;
     }
 
@@ -335,6 +340,7 @@ public class UserService {
         res.setAddress(user.getAddress());
         res.setAvatar(user.getAvatar());
         res.setStatus(user.getStatus());
+        res.setVip(user.isVip());
 
         return res;
     }

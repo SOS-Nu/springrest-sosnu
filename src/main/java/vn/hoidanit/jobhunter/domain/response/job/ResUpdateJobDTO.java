@@ -14,6 +14,7 @@ public class ResUpdateJobDTO {
     private String name;
 
     private String location;
+    private String address;
 
     private double salary;
 

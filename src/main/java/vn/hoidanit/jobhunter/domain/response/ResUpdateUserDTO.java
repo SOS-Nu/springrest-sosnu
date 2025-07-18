@@ -16,6 +16,7 @@ public class ResUpdateUserDTO {
     private int age;
     private Instant updatedAt;
     private String avatar;
+    private boolean isVip;
 
     private CompanyUser company;
 

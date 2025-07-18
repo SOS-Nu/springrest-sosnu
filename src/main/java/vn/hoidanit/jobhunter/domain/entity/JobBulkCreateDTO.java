@@ -14,6 +14,9 @@ public class JobBulkCreateDTO {
     @NotBlank(message = "Địa điểm không được để trống")
     private String location;
 
+    @NotBlank(message = "địa chỉ không được để trống")
+    private String address;
+
     @NotBlank(message = "Mức lương không được để trống")
     private String salary;
 
@@ -81,6 +84,14 @@ public class JobBulkCreateDTO {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
     }
 
     public String getSalary() {

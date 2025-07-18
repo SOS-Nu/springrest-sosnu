@@ -60,6 +60,7 @@ public class CompanyService {
         dto.setFoundingYear(company.getFoundingYear());
         dto.setLocation(company.getLocation());
         dto.setCreatedAt(company.getCreatedAt());
+        dto.setUpdatedAt(company.getUpdatedAt());
 
         // Lấy danh sách user thuộc công ty
         List<User> users = this.userRepository.findByCompany(company);
@@ -99,6 +100,7 @@ public class CompanyService {
             currentCompany.setScale(c.getScale());
             currentCompany.setCountry(c.getCountry());
             currentCompany.setFoundingYear(c.getFoundingYear());
+            currentCompany.setLocation(c.getLocation());
 
             return this.companyRepository.save(currentCompany);
         }

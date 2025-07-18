@@ -57,7 +57,6 @@ public class Company {
     private int foundingYear; // Năm thành lập
     private String location;
 
-
     @OneToMany(mappedBy = "company", fetch = FetchType.LAZY)
     @JsonIgnore
     List<User> users;

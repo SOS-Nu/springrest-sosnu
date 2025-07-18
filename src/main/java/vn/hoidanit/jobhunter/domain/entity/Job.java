@@ -43,6 +43,8 @@ public class Job {
     @NotBlank(message = "location không được để trống")
     private String location;
 
+    private String address;
+
     private double salary;
 
     private int quantity;
