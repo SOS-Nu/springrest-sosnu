@@ -76,7 +76,9 @@ public class SecurityConfiguration {
                 "/api/v1/auth/verify-otp-change-password",
                 "/api/v1/users/update-own-info",
                 "/api/v1/gemini/evaluate-cv/**",
-                "/api/v1/notify-user/**"
+                "/api/v1/notify-user/**",
+                "/api/v1/gemini/search-results/**",
+                "/api/v1/gemini/initiate-search/**"
         };
         http
                 .csrf(c -> c.disable())

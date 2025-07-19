@@ -27,8 +27,10 @@ import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.ai.ResCvEvaluationDTO;
+import vn.hoidanit.jobhunter.domain.response.ai.SearchState;
 import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResFindJobsDTO;
+import vn.hoidanit.jobhunter.domain.response.job.ResInitiateSearchDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResJobWithScoreDTO;
 import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
@@ -43,6 +45,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class GeminiService {
+    private static final int CHUNK_SIZE = 100;
 
     // ... (Giữ nguyên các biến và constructor)
     private final RestTemplate restTemplate;
@@ -272,79 +275,210 @@ public class GeminiService {
         }
     }
 
-    public ResFindJobsDTO findJobsForCandidate(
-            String skillsDescription, byte[] cvFileBytes, String cvFileName, Pageable pageable)
+    // public ResFindJobsDTO findJobsForCandidate(
+    // String skillsDescription, byte[] cvFileBytes, String cvFileName, Pageable
+    // pageable)
+    // throws IdInvalidException, IOException {
+    //
+    // final int PRE_FILTER_LIMIT = 200;
+    //
+    // String cvText = (cvFileBytes != null) ?
+    // fileService.extractTextFromBytes(cvFileBytes) : "";
+    //
+    // // <<< THAY ĐỔI CỐT LÕI: SỬ DỤNG CACHE >>>
+    // // 1. Tạo cache key duy nhất từ nội dung CV và skills
+    // String cacheKey = "find_jobs:" + SecurityUtil.hash(cvText +
+    // skillsDescription);
+    //
+    // // 2. Lấy "ngăn" cache có tên "jobMatches"
+    // Cache cache = cacheManager.getCache("jobMatches");
+    //
+    // // 3. Thử lấy kết quả từ cache trước
+    // // Sử dụng get(key, type) để tránh phải ép kiểu thủ công
+    // List<ResJobWithScoreDTO> allRankedJobs = cache.get(cacheKey, List.class);
+    //
+    // // 4. KIỂM TRA CACHE
+    // if (allRankedJobs == null) {
+    // // ---- CACHE MISS (Không có trong cache) ----
+    // System.out.println("LOG: Cache miss! Calling AI for key: " + cacheKey);
+    //
+    // // Thực hiện logic tìm kiếm và gọi AI như cũ
+    // Set<String> keywords = extractKeywords(cvText, skillsDescription);
+    // List<Job> potentialJobs = preFilterActiveJobs(keywords, PRE_FILTER_LIMIT);
+    //
+    // if (potentialJobs.isEmpty()) {
+    // return new ResFindJobsDTO(Collections.emptyList(), new
+    // ResultPaginationDTO.Meta());
+    // }
+    //
+    // List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(
+    // skillsDescription, cvText, potentialJobs);
+    //
+    // Map<Long, Job> jobMap = potentialJobs.stream()
+    // .collect(Collectors.toMap(Job::getId, Function.identity()));
+    //
+    // allRankedJobs = new ArrayList<>(); // Khởi tạo list mới
+    // for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
+    // Job jobDetail = jobMap.get(rankedJob.getJobId());
+    // if (jobDetail != null) {
+    // ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
+    // allRankedJobs.add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
+    // }
+    // }
+    //
+    // allRankedJobs.sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
+    //
+    // // 5. LƯU KẾT QUẢ VÀO CACHE để dùng cho các lần sau
+    // cache.put(cacheKey, allRankedJobs);
+    //
+    // } else {
+    // // ---- CACHE HIT (Tìm thấy trong cache) ----
+    // System.out.println("LOG: Cache hit! Found data for key: " + cacheKey);
+    // }
+    //
+    // // === PHÂN TRANG KẾT QUẢ TRẢ VỀ (Luôn chạy, dù là cache hit hay miss) ===
+    // int start = (int) pageable.getOffset();
+    // int end = Math.min((start + pageable.getPageSize()), allRankedJobs.size());
+    //
+    // List<ResJobWithScoreDTO> paginatedResult = (start >= allRankedJobs.size())
+    // ? Collections.emptyList()
+    // : allRankedJobs.subList(start, end);
+    //
+    // // Meta giờ sẽ luôn nhất quán vì `allRankedJobs.size()` không đổi
+    // ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
+    // meta.setPage(pageable.getPageNumber() + 1);
+    // meta.setPageSize(pageable.getPageSize());
+    // meta.setPages((int) Math.ceil((double) allRankedJobs.size() /
+    // pageable.getPageSize()));
+    // meta.setTotal(allRankedJobs.size());
+    //
+    // return new ResFindJobsDTO(paginatedResult, meta);
+    // }
+
+    public ResInitiateSearchDTO initiateJobSearch(
+            String skillsDescription, byte[] cvFileBytes, Pageable pageable)
             throws IdInvalidException, IOException {
 
-        final int PRE_FILTER_LIMIT = 200;
-
         String cvText = (cvFileBytes != null) ? fileService.extractTextFromBytes(cvFileBytes) : "";
-
-        // <<< THAY ĐỔI CỐT LÕI: SỬ DỤNG CACHE >>>
-        // 1. Tạo cache key duy nhất từ nội dung CV và skills
         String cacheKey = "find_jobs:" + SecurityUtil.hash(cvText + skillsDescription);
-
-        // 2. Lấy "ngăn" cache có tên "jobMatches"
         Cache cache = cacheManager.getCache("jobMatches");
 
-        // 3. Thử lấy kết quả từ cache trước
-        // Sử dụng get(key, type) để tránh phải ép kiểu thủ công
-        List<ResJobWithScoreDTO> allRankedJobs = cache.get(cacheKey, List.class);
+        final int PRE_FILTER_LIMIT = 1000;
+        Set<String> keywords = extractKeywords(cvText, skillsDescription);
+        List<Job> potentialJobs = preFilterActiveJobs(keywords, PRE_FILTER_LIMIT);
+        List<Long> potentialJobIds = potentialJobs.stream().map(Job::getId).collect(Collectors.toList());
 
-        // 4. KIỂM TRA CACHE
-        if (allRankedJobs == null) {
-            // ---- CACHE MISS (Không có trong cache) ----
-            System.out.println("LOG: Cache miss! Calling AI for key: " + cacheKey);
+        SearchState state = new SearchState();
+        state.setPotentialJobIds(potentialJobIds);
 
-            // Thực hiện logic tìm kiếm và gọi AI như cũ
-            Set<String> keywords = extractKeywords(cvText, skillsDescription);
-            List<Job> potentialJobs = preFilterActiveJobs(keywords, PRE_FILTER_LIMIT);
+        // <<< THAY ĐỔI 1: LƯU NGỮ CẢNH VÀO STATE >>>
+        state.setSkillsDescription(skillsDescription);
+        state.setCvText(cvText);
 
-            if (potentialJobs.isEmpty()) {
-                return new ResFindJobsDTO(Collections.emptyList(), new ResultPaginationDTO.Meta());
-            }
+        int targetSize = pageable.getPageSize();
+        processJobChunks(state, targetSize, skillsDescription, cvText);
 
-            List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(
-                    skillsDescription, cvText, potentialJobs);
+        cache.put(cacheKey, state);
 
-            Map<Long, Job> jobMap = potentialJobs.stream()
-                    .collect(Collectors.toMap(Job::getId, Function.identity()));
+        List<ResJobWithScoreDTO> paginatedResult = state.getFoundJobs().stream()
+                .limit(pageable.getPageSize()).collect(Collectors.toList());
 
-            allRankedJobs = new ArrayList<>(); // Khởi tạo list mới
-            for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
-                Job jobDetail = jobMap.get(rankedJob.getJobId());
-                if (jobDetail != null) {
-                    ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
-                    allRankedJobs.add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
-                }
-            }
+        ResultPaginationDTO.Meta meta = createMeta(state, pageable);
 
-            allRankedJobs.sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
+        return new ResInitiateSearchDTO(paginatedResult, meta, cacheKey);
+    }
 
-            // 5. LƯU KẾT QUẢ VÀO CACHE để dùng cho các lần sau
-            cache.put(cacheKey, allRankedJobs);
+    public ResFindJobsDTO getJobSearchResults(String searchId, Pageable pageable) throws IdInvalidException {
+        Cache cache = cacheManager.getCache("jobMatches");
+        SearchState state = cache.get(searchId, SearchState.class);
 
-        } else {
-            // ---- CACHE HIT (Tìm thấy trong cache) ----
-            System.out.println("LOG: Cache hit! Found data for key: " + cacheKey);
+        if (state == null) {
+            throw new IdInvalidException("Phiên tìm kiếm không tồn tại hoặc đã hết hạn. Vui lòng thử lại.");
         }
 
-        // === PHÂN TRANG KẾT QUẢ TRẢ VỀ (Luôn chạy, dù là cache hit hay miss) ===
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), allRankedJobs.size());
+        int targetSize = (pageable.getPageNumber() + 1) * pageable.getPageSize();
 
-        List<ResJobWithScoreDTO> paginatedResult = (start >= allRankedJobs.size())
-                ? Collections.emptyList()
-                : allRankedJobs.subList(start, end);
+        if (state.getFoundJobs().size() < targetSize && !state.isFullyProcessed()) {
+            // <<< THAY ĐỔI 2: LẤY LẠI NGỮ CẢNH TỪ STATE >>>
+            // Giờ đây chúng ta có thể lấy lại ngữ cảnh một cách an toàn
+            String skillsDescription = state.getSkillsDescription();
+            String cvText = state.getCvText();
 
-        // Meta giờ sẽ luôn nhất quán vì `allRankedJobs.size()` không đổi
-        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
-        meta.setPage(pageable.getPageNumber() + 1);
-        meta.setPageSize(pageable.getPageSize());
-        meta.setPages((int) Math.ceil((double) allRankedJobs.size() / pageable.getPageSize()));
-        meta.setTotal(allRankedJobs.size());
+            // Gọi xử lý cụm với ngữ cảnh đã được lấy lại
+            processJobChunks(state, targetSize, skillsDescription, cvText);
+
+            // Cập nhật lại trạng thái mới vào cache sau khi đã xử lý thêm
+            cache.put(searchId, state);
+        }
+
+        List<ResJobWithScoreDTO> paginatedResult = state.getFoundJobs().stream()
+                .skip(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .collect(Collectors.toList());
+
+        ResultPaginationDTO.Meta meta = createMeta(state, pageable);
 
         return new ResFindJobsDTO(paginatedResult, meta);
+    }
+
+    // <<< PHƯƠNG THỨC CỐT LÕI MỚI: Xử lý các cụm Job >>>
+    private void processJobChunks(SearchState state, int targetFoundSize, String skillsDescription, String cvText) {
+        // Tiếp tục xử lý chừng nào chưa đủ kết quả VÀ vẫn còn job tiềm năng
+        while (state.getFoundJobs().size() < targetFoundSize && !state.isFullyProcessed()) {
+            int startIndex = state.getLastProcessedIndex();
+            if (startIndex >= state.getPotentialJobIds().size()) {
+                state.setFullyProcessed(true); // Đánh dấu đã xử lý hết
+                break;
+            }
+
+            int endIndex = Math.min(startIndex + CHUNK_SIZE, state.getPotentialJobIds().size());
+
+            // Lấy ra ID của cụm hiện tại
+            List<Long> currentChunkIds = state.getPotentialJobIds().subList(startIndex, endIndex);
+
+            // Lấy thông tin đầy đủ của các job trong cụm
+            List<Job> jobsToProcess = jobRepository.findAllById(currentChunkIds);
+
+            if (!jobsToProcess.isEmpty()) {
+                // Gọi AI để chấm điểm cho cụm này
+                List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(skillsDescription, cvText,
+                        jobsToProcess);
+
+                // Chuyển thành Map để tra cứu
+                Map<Long, Job> jobMap = jobsToProcess.stream()
+                        .collect(Collectors.toMap(Job::getId, Function.identity()));
+
+                // Thêm các kết quả tốt vào danh sách đã tìm thấy
+                for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
+                    // Lọc theo ngưỡng điểm của bạn, ví dụ 70
+                    if (rankedJob.getScore() >= 70) {
+                        Job jobDetail = jobMap.get(rankedJob.getJobId());
+                        if (jobDetail != null) {
+                            ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
+                            state.getFoundJobs().add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
+                        }
+                    }
+                }
+                // Sắp xếp lại toàn bộ danh sách đã tìm thấy để đảm bảo thứ tự đúng
+                state.getFoundJobs().sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
+            }
+
+            // Cập nhật lại con trỏ vị trí đã xử lý
+            state.setLastProcessedIndex(endIndex);
+        }
+    }
+
+    // Helper để tạo meta, tránh lặp code
+    private ResultPaginationDTO.Meta createMeta(SearchState state, Pageable pageable) {
+        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
+        // Total bây giờ là tổng số kết quả đã tìm thấy và lọc qua ngưỡng điểm
+        long total = state.getFoundJobs().size();
+
+        meta.setPage(pageable.getPageNumber() + 1);
+        meta.setPageSize(pageable.getPageSize());
+        meta.setTotal(total);
+        meta.setPages((int) Math.ceil((double) total / pageable.getPageSize()));
+        return meta;
     }
 
     /**
