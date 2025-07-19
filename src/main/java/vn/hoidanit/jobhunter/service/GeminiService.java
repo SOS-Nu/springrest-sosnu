@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -50,6 +52,7 @@ public class GeminiService {
     private final JobRepository jobRepository; // THÊM REPOSITORY NÀY
     private final JobService jobService; // THÊM SERVICE NÀY
     private final UserRepository userRepository;
+    private final CacheManager cacheManager; // <<< THÊM BIẾN NÀY
 
     @Value("${gemini.api.key}")
     private String geminiApiKey;
@@ -58,7 +61,7 @@ public class GeminiService {
     private String geminiApiUrl;
 
     public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService,
-            ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService,
+            ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService, CacheManager cacheManager,
             UserRepository userRepository) {
         this.restTemplate = restTemplate;
         this.userService = userService;
@@ -67,6 +70,7 @@ public class GeminiService {
         this.jobRepository = jobRepository;
         this.jobService = jobService;
         this.userRepository = userRepository;
+        this.cacheManager = cacheManager;
     }
 
     public ResFindCandidatesDTO findCandidates(String jobDescription) throws IdInvalidException {
@@ -272,33 +276,41 @@ public class GeminiService {
             String skillsDescription, byte[] cvFileBytes, String cvFileName, Pageable pageable)
             throws IdInvalidException, IOException {
 
-        final int PRE_FILTER_LIMIT = 200; // Lọc sơ bộ lấy 150 jobs tiềm năng nhất
+        final int PRE_FILTER_LIMIT = 200;
 
-        // Tạo cache key từ nội dung yêu cầu
-        String cvTextForCache = (cvFileBytes != null) ? fileService.extractTextFromBytes(cvFileBytes) : "";
-        String cacheKey = "find_jobs:" + SecurityUtil.hash(cvTextForCache + skillsDescription);
+        String cvText = (cvFileBytes != null) ? fileService.extractTextFromBytes(cvFileBytes) : "";
 
-        // Cache cache = cacheManager.getCache("jobMatches");
-        // List<ResJobWithScoreDTO> allRankedJobs = cache.get(cacheKey, List.class);
-        List<ResJobWithScoreDTO> allRankedJobs = null; // Giả sử chưa có cache
+        // <<< THAY ĐỔI CỐT LÕI: SỬ DỤNG CACHE >>>
+        // 1. Tạo cache key duy nhất từ nội dung CV và skills
+        String cacheKey = "find_jobs:" + SecurityUtil.hash(cvText + skillsDescription);
 
+        // 2. Lấy "ngăn" cache có tên "jobMatches"
+        Cache cache = cacheManager.getCache("jobMatches");
+
+        // 3. Thử lấy kết quả từ cache trước
+        // Sử dụng get(key, type) để tránh phải ép kiểu thủ công
+        List<ResJobWithScoreDTO> allRankedJobs = cache.get(cacheKey, List.class);
+
+        // 4. KIỂM TRA CACHE
         if (allRankedJobs == null) {
-            // === GIAI ĐOẠN 1: LỌC SƠ BỘ CÁC JOB ĐANG ACTIVE ===
-            Set<String> keywords = extractKeywords(cvTextForCache, skillsDescription);
+            // ---- CACHE MISS (Không có trong cache) ----
+            System.out.println("LOG: Cache miss! Calling AI for key: " + cacheKey);
+
+            // Thực hiện logic tìm kiếm và gọi AI như cũ
+            Set<String> keywords = extractKeywords(cvText, skillsDescription);
             List<Job> potentialJobs = preFilterActiveJobs(keywords, PRE_FILTER_LIMIT);
 
             if (potentialJobs.isEmpty()) {
                 return new ResFindJobsDTO(Collections.emptyList(), new ResultPaginationDTO.Meta());
             }
 
-            // === GIAI ĐOẠN 2: CHẤM ĐIỂM BẰNG AI ===
             List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(
-                    skillsDescription, cvFileBytes, cvFileName, potentialJobs);
+                    skillsDescription, cvText, potentialJobs);
 
             Map<Long, Job> jobMap = potentialJobs.stream()
                     .collect(Collectors.toMap(Job::getId, Function.identity()));
 
-            allRankedJobs = new ArrayList<>();
+            allRankedJobs = new ArrayList<>(); // Khởi tạo list mới
             for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
                 Job jobDetail = jobMap.get(rankedJob.getJobId());
                 if (jobDetail != null) {
@@ -309,14 +321,15 @@ public class GeminiService {
 
             allRankedJobs.sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
 
-            // Lưu vào cache
-            // cache.put(cacheKey, allRankedJobs);
-            System.out.println("LOG: Đã gọi AI và có thể lưu kết quả vào cache với key: " + cacheKey);
+            // 5. LƯU KẾT QUẢ VÀO CACHE để dùng cho các lần sau
+            cache.put(cacheKey, allRankedJobs);
+
         } else {
-            System.out.println("LOG: Đã tìm thấy kết quả trong cache với key: " + cacheKey);
+            // ---- CACHE HIT (Tìm thấy trong cache) ----
+            System.out.println("LOG: Cache hit! Found data for key: " + cacheKey);
         }
 
-        // === PHÂN TRANG KẾT QUẢ TRẢ VỀ ===
+        // === PHÂN TRANG KẾT QUẢ TRẢ VỀ (Luôn chạy, dù là cache hit hay miss) ===
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), allRankedJobs.size());
 
@@ -324,6 +337,7 @@ public class GeminiService {
                 ? Collections.emptyList()
                 : allRankedJobs.subList(start, end);
 
+        // Meta giờ sẽ luôn nhất quán vì `allRankedJobs.size()` không đổi
         ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
         meta.setPage(pageable.getPageNumber() + 1);
         meta.setPageSize(pageable.getPageSize());
@@ -385,7 +399,7 @@ public class GeminiService {
      * ĐÃ CẬP NHẬT: Gửi thông tin ứng viên dưới dạng text thay vì file
      */
     private List<GeminiJobScoreResponse> rankJobsWithGemini(
-            String skillsDescription, byte[] cvFileBytes, String cvFileName, List<Job> jobs) {
+            String skillsDescription, String cvText, List<Job> jobs) {
 
         List<Map<String, Object>> parts = new ArrayList<>();
 
@@ -394,18 +408,16 @@ public class GeminiService {
                 + "Candidate's Information:";
         parts.add(Map.of("text", initialPrompt));
 
-        // Thêm thông tin ứng viên (text hoặc trích xuất text từ file)
-        if (cvFileBytes != null) {
-            try {
-                String cvText = fileService.extractTextFromBytes(cvFileBytes);
-                parts.add(Map.of("text", "Candidate Resume Text:\n" + cvText));
-            } catch (IOException e) {
-                System.err.println("Could not extract text from CV for job finding: " + e.getMessage());
-            }
-            if (skillsDescription != null && !skillsDescription.trim().isEmpty()) {
+        // <<< THAY ĐỔI 5: Đơn giản hóa logic, sử dụng trực tiếp cvText >>>
+        boolean hasCvText = (cvText != null && !cvText.trim().isEmpty());
+        boolean hasSkills = (skillsDescription != null && !skillsDescription.trim().isEmpty());
+
+        if (hasCvText) {
+            parts.add(Map.of("text", "Candidate Resume Text:\n" + cvText));
+            if (hasSkills) {
                 parts.add(Map.of("text", "Additional skills summary: " + skillsDescription));
             }
-        } else if (skillsDescription != null && !skillsDescription.trim().isEmpty()) {
+        } else if (hasSkills) {
             parts.add(Map.of("text", skillsDescription));
         }
 
