@@ -433,34 +433,31 @@ public class GeminiService {
 
             int endIndex = Math.min(startIndex + CHUNK_SIZE, state.getPotentialJobIds().size());
 
-            // Lấy ra ID của cụm hiện tại
             List<Long> currentChunkIds = state.getPotentialJobIds().subList(startIndex, endIndex);
-
-            // Lấy thông tin đầy đủ của các job trong cụm
             List<Job> jobsToProcess = jobRepository.findAllById(currentChunkIds);
 
             if (!jobsToProcess.isEmpty()) {
-                // Gọi AI để chấm điểm cho cụm này
+                // Gọi AI để chấm điểm cho cụm này.
+                // Gemini đã trả về danh sách được sắp xếp cho cụm này.
                 List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(skillsDescription, cvText,
                         jobsToProcess);
 
-                // Chuyển thành Map để tra cứu
                 Map<Long, Job> jobMap = jobsToProcess.stream()
                         .collect(Collectors.toMap(Job::getId, Function.identity()));
 
-                // Thêm các kết quả tốt vào danh sách đã tìm thấy
                 for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
-                    // Lọc theo ngưỡng điểm của bạn, ví dụ 70
                     if (rankedJob.getScore() >= 70) {
                         Job jobDetail = jobMap.get(rankedJob.getJobId());
                         if (jobDetail != null) {
                             ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
+                            // Chỉ cần thêm vào cuối danh sách
                             state.getFoundJobs().add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
                         }
                     }
                 }
-                // Sắp xếp lại toàn bộ danh sách đã tìm thấy để đảm bảo thứ tự đúng
-                state.getFoundJobs().sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
+
+                // <<< XÓA DÒNG NÀY >>>
+                // state.getFoundJobs().sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
             }
 
             // Cập nhật lại con trỏ vị trí đã xử lý
