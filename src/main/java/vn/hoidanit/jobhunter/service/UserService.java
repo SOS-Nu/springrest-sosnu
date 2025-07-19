@@ -199,7 +199,10 @@ public class UserService {
             if (reqUser.getCompany() != null) {
                 Optional<Company> companyOptional = this.companyService.findById(reqUser.getCompany().getId());
                 currentUser.setCompany(companyOptional.isPresent() ? companyOptional.get() : null);
+            } else {
+                currentUser.setCompany((reqUser.getCompany()));
             }
+
             // check role
             if (reqUser.getRole() != null) {
                 Role r = this.roleService.fetchById(reqUser.getRole().getId());

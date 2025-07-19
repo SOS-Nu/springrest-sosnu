@@ -134,9 +134,14 @@ public class JobService {
         job.setCompany(company);
 
         // Xử lý skills
-        if (jobDTO.getSkillIds() != null && !jobDTO.getSkillIds().isEmpty()) {
-            List<Skill> dbSkills = skillRepository.findByIdIn(jobDTO.getSkillIds());
-            if (dbSkills.size() != jobDTO.getSkillIds().size()) {
+        if (jobDTO.getSkills() != null && !jobDTO.getSkills().isEmpty()) {
+            // Lấy ra danh sách ID từ List<SkillDTO>
+            List<Long> skillIds = jobDTO.getSkills().stream()
+                    .map(ReqCreateJobDTO.SkillDTO::getId)
+                    .collect(Collectors.toList());
+
+            List<Skill> dbSkills = skillRepository.findByIdIn(skillIds);
+            if (dbSkills.size() != skillIds.size()) {
                 throw new IdInvalidException("Một hoặc nhiều kỹ năng không tồn tại");
             }
             job.setSkills(dbSkills);
@@ -268,16 +273,20 @@ public class JobService {
         jobInDB.setActive(jobDTO.isActive());
 
         // Xử lý skills
-        if (jobDTO.getSkillIds() != null && !jobDTO.getSkillIds().isEmpty()) {
-            List<Skill> dbSkills = skillRepository.findByIdIn(jobDTO.getSkillIds());
-            if (dbSkills.size() != jobDTO.getSkillIds().size()) {
+        if (jobDTO.getSkills() != null && !jobDTO.getSkills().isEmpty()) {
+            // Lấy ra danh sách ID từ List<SkillDTO>
+            List<Long> skillIds = jobDTO.getSkills().stream()
+                    .map(ReqUpdateJobDTO.SkillDTO::getId)
+                    .collect(Collectors.toList());
+
+            List<Skill> dbSkills = skillRepository.findByIdIn(skillIds);
+            if (dbSkills.size() != skillIds.size()) {
                 throw new IdInvalidException("Một hoặc nhiều kỹ năng không tồn tại");
             }
             jobInDB.setSkills(dbSkills);
         } else {
-            jobInDB.setSkills(null);
+            jobInDB.setSkills(null); // Xóa hết skills nếu danh sách rỗng
         }
-
         // Lưu job
         Job updatedJob = jobRepository.save(jobInDB);
 

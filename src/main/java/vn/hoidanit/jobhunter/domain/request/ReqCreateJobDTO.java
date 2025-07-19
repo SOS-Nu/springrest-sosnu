@@ -5,8 +5,13 @@ import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.Getter;
+import lombok.Setter;
 import vn.hoidanit.jobhunter.util.constant.LevelEnum;
 
+// Thêm @Getter @Setter cho tiện lợi
+@Getter
+@Setter
 public class ReqCreateJobDTO {
 
     @NotBlank(message = "Tên công việc không được để trống")
@@ -30,86 +35,17 @@ public class ReqCreateJobDTO {
     private Instant endDate;
     private boolean active;
 
-    private List<Long> skillIds;
+    // ========== CHANGE START ==========
+    // Thay thế List<Long> skillIds bằng List<SkillDTO> skills
+    private List<SkillDTO> skills;
 
-    // Getters and Setters
-    public String getName() {
-        return name;
+    @Getter
+    @Setter
+    public static class SkillDTO {
+        @NotNull
+        private long id;
     }
+    // ========== CHANGE END ==========
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getLocation() {
-        return location;
-    }
-
-    public void setLocation(String location) {
-        this.location = location;
-    }
-
-    public Double getSalary() {
-        return salary;
-    }
-
-    public void setSalary(Double salary) {
-        this.salary = salary;
-    }
-
-    public Integer getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(Integer quantity) {
-        this.quantity = quantity;
-    }
-
-    public LevelEnum getLevel() {
-        return level;
-    }
-
-    public void setLevel(LevelEnum level) {
-        this.level = level;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Instant getStartDate() {
-        return startDate;
-    }
-
-    public void setStartDate(Instant startDate) {
-        this.startDate = startDate;
-    }
-
-    public Instant getEndDate() {
-        return endDate;
-    }
-
-    public void setEndDate(Instant endDate) {
-        this.endDate = endDate;
-    }
-
-    public boolean isActive() {
-        return active;
-    }
-
-    public void setActive(boolean active) {
-        this.active = active;
-    }
-
-    public List<Long> getSkillIds() {
-        return skillIds;
-    }
-
-    public void setSkillIds(List<Long> skillIds) {
-        this.skillIds = skillIds;
-    }
+    // Getters and Setters đã được xử lý bởi Lombok
 }
