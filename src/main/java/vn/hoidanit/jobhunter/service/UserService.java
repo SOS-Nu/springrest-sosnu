@@ -587,4 +587,12 @@ public class UserService {
         // Lưu lại vào database
         this.userRepository.save(currentUser);
     }
+
+    public User fetchUserByEmail(String email) {
+        // 1. Gọi phương thức repository như cũ, không thay đổi
+        User user = this.userRepository.findByEmail(email);
+
+        // 2. Bọc kết quả (có thể là null) vào trong Optional trước khi trả về
+        return user;
+    }
 }
