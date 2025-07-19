@@ -16,5 +16,6 @@ public class ResultPaginationDTO {
         private int pageSize;
         private int pages;
         private long total;
+        private boolean hasMore;
     }
 }

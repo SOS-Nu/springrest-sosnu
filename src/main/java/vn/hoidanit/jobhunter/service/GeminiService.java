@@ -475,6 +475,8 @@ public class GeminiService {
         meta.setPageSize(pageable.getPageSize());
         meta.setTotal(total);
         meta.setPages((int) Math.ceil((double) total / pageable.getPageSize()));
+        meta.setHasMore(!state.isFullyProcessed());
+
         return meta;
     }
 
