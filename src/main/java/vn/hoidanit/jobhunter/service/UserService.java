@@ -207,6 +207,8 @@ public class UserService {
             if (reqUser.getRole() != null) {
                 Role r = this.roleService.fetchById(reqUser.getRole().getId());
                 currentUser.setRole(r != null ? r : null);
+            } else {
+                currentUser.setRole(reqUser.getRole());
             }
 
             // update
