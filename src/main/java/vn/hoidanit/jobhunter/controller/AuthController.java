@@ -93,9 +93,9 @@ public class AuthController {
                     currentUserDB.getAge(),
                     currentUserDB.getAvatar(),
                     currentUserDB.isPublic(),
-
                     currentUserDB.getRole(),
                     currentUserDB.isVip(),
+                    currentUserDB.getVipExpiryDate(),
 
                     currentUserDB.getCompany() != null
                             ? new ResLoginDTO.UserLogin.CompanyUser(
@@ -110,6 +110,7 @@ public class AuthController {
                                     currentUserDB.getCompany().getCountry(),
                                     currentUserDB.getCompany().getFoundingYear(),
                                     currentUserDB.getCompany().getLocation())
+
                             : null);
             res.setUser(userLogin);
         }
@@ -187,6 +188,8 @@ public class AuthController {
                     user.isPublic(),
                     user.getRole(),
                     user.isVip(),
+                    user.getVipExpiryDate(),
+
                     user.getCompany() != null
                             ? new ResLoginDTO.UserLogin.CompanyUser(
                                     user.getCompany().getId(),
@@ -250,6 +253,8 @@ public class AuthController {
             userLogin.setPublic(currentUserDB.isPublic());
             userLogin.setRole(currentUserDB.getRole());
             userLogin.setVip(currentUserDB.isVip());
+            userLogin.setVipExpiryDate(currentUserDB.getVipExpiryDate());
+
             userLogin.setCompany(currentUserDB.getCompany() != null
                     ? new ResLoginDTO.UserLogin.CompanyUser(
                             currentUserDB.getCompany().getId(),
@@ -302,6 +307,8 @@ public class AuthController {
                     currentUserDB.isPublic(),
                     currentUserDB.getRole(),
                     currentUserDB.isVip(),
+                    currentUserDB.getVipExpiryDate(),
+
                     currentUserDB.getCompany() != null
                             ? new ResLoginDTO.UserLogin.CompanyUser(
                                     currentUserDB.getCompany().getId(),

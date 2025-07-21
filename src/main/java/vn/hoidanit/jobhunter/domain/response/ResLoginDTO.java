@@ -1,5 +1,8 @@
 package vn.hoidanit.jobhunter.domain.response;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -31,6 +34,8 @@ public class ResLoginDTO {
         private boolean isPublic;
         private Role role;
         private boolean isVip;
+        private LocalDateTime vipExpiryDate;
+
         private CompanyUser company;
 
         @Getter
