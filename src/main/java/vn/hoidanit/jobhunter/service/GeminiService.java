@@ -584,7 +584,13 @@ public class GeminiService {
                     objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiJobScoreResponse.class));
         } catch (Exception e) {
             System.err.println("Error calling Gemini API for finding jobs: " + e.getMessage());
+            // THAY ĐỔI Ở ĐÂY
+            System.err.println("======= GEMINI API CALL FAILED (find-jobs) =======");
+            // In ra toàn bộ thông tin lỗi, bạn sẽ thấy mã lỗi như 429 ở đây
+            e.printStackTrace();
+            System.err.println("==================================================");
             return Collections.emptyList();
+
         }
     }
 
