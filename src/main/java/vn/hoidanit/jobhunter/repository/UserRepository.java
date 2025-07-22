@@ -35,12 +35,12 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
      */
     @Query(value = "SELECT u.* FROM users u " +
             "LEFT JOIN online_resumes o ON u.online_resume_id = o.id " +
-            // BỎ ĐIỀU KIỆN is_public
-            "WHERE " +
+            // THÊM ĐIỀU KIỆN is_vip = TRUE VÀ BỌC NGOẶC CHO MATCH
+            "WHERE u.is_vip = TRUE AND (" +
             "  MATCH(u.name, u.address) AGAINST(:keywords IN NATURAL LANGUAGE MODE) OR " +
-            // SỬA Ở ĐÂY: o.fullName -> o.full_name
-            "  MATCH(o.title, o.full_name, o.summary, o.certifications, o.educations, o.languages) AGAINST(:keywords IN NATURAL LANGUAGE MODE) "
+            "  MATCH(o.title, o.full_name, o.summary, o.certifications, o.educations, o.languages) AGAINST(:keywords IN NATURAL LANGUAGE MODE)"
             +
+            ") " + // Đóng ngoặc ở đây
             "LIMIT :limit", nativeQuery = true)
     List<User> preFilterCandidatesByKeywords(
             @Param("keywords") String keywords,

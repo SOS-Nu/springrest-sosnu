@@ -42,6 +42,7 @@ import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -137,97 +138,43 @@ public class GeminiService {
      */
     public ResInitiateCandidateSearchDTO initiateCandidateSearch(String jobDescription, Pageable pageable)
             throws IdInvalidException {
-        System.out.println("LOG: >>> [START] Initiating new candidate search...");
+        System.out.println("LOG: >>> [START] Initiating new ON-DEMAND candidate search...");
 
-        // BƯỚC 1: Trích xuất từ khóa từ Job Description (logic đơn giản)
-        Set<String> keywordsSet = extractKeywords("", jobDescription); // Dùng lại hàm helper có sẵn
+        Set<String> keywordsSet = extractKeywords("", jobDescription);
         String keywords = String.join(" ", keywordsSet);
 
-        // BƯỚC 2: LẤY USER ĐÃ LỌC SƠ BỘ bằng FTS thay vì findAll()
-        final int PRE_FILTER_LIMIT = 50; // Giới hạn số lượng ứng viên để gửi cho AI
-        List<User> allUsers = this.userRepository.preFilterCandidatesByKeywords(keywords, PRE_FILTER_LIMIT);
-
-        // Phần còn lại của logic gần như giữ nguyên
-        List<Long> potentialUserIds = allUsers.stream().map(User::getId).collect(Collectors.toList());
+        final int PRE_FILTER_LIMIT = 1000; // gioi han ung vien tiem nang de tranh qua tai
+        List<User> potentialUsers = this.userRepository.preFilterCandidatesByKeywords(keywords, PRE_FILTER_LIMIT);
+        List<Long> potentialUserIds = potentialUsers.stream().map(User::getId).collect(Collectors.toList());
         System.out.println("LOG: Found " + potentialUserIds.size() + " potential candidates after FTS pre-filtering.");
 
-        if (potentialUserIds.isEmpty()) {
-            return new ResInitiateCandidateSearchDTO(Collections.emptyList(), new ResultPaginationDTO.Meta(),
-                    "no_users_found");
-        }
-
-        // Tạo một map để tra cứu thông tin chi tiết của user nhanh chóng
-        Map<Long, ResUserDetailDTO> userDetailMap = allUsers.stream()
-                .collect(Collectors.toMap(User::getId, ResUserDetailDTO::convertToDTO));
-
-        // 2. Tạo searchId và State object
-        String searchId = "candidate_search:" + SecurityUtil.hash(jobDescription + System.currentTimeMillis());
+        // Tạo State và searchId
         CandidateSearchState state = new CandidateSearchState();
-        state.setJobDescription(jobDescription);
         state.setPotentialUserIds(potentialUserIds);
+        state.setJobDescription(jobDescription);
+        String searchId = "candidate_search:" + SecurityUtil.hash(jobDescription + System.currentTimeMillis());
 
-        // 3. Xử lý toàn bộ ứng viên theo từng cụm (chunk)
-        List<ResCandidateWithScoreDTO> allFoundCandidates = new ArrayList<>();
-        int totalChunks = (int) Math.ceil((double) potentialUserIds.size() / CANDIDATE_CHUNK_SIZE);
+        // Chỉ xử lý đủ cho trang đầu tiên
+        int targetSize = pageable.getPageSize();
+        processCandidateChunks(state, targetSize);
 
-        for (int i = 0; i < totalChunks; i++) {
-            int startIndex = i * CANDIDATE_CHUNK_SIZE;
-            int endIndex = Math.min(startIndex + CANDIDATE_CHUNK_SIZE, potentialUserIds.size());
-            List<Long> chunkIds = potentialUserIds.subList(startIndex, endIndex);
-
-            // Lấy DTO từ map đã tạo
-            List<ResUserDetailDTO> chunkUserDetails = chunkIds.stream()
-                    .map(userDetailMap::get)
-                    .collect(Collectors.toList());
-
-            System.out.println("LOG: Processing chunk " + (i + 1) + "/" + totalChunks + " with "
-                    + chunkUserDetails.size() + " candidates.");
-
-            // Gọi Gemini để chấm điểm cho cụm này
-            List<GeminiScoreResponse> rankedUsers = rankUsersWithGemini(jobDescription, chunkUserDetails);
-
-            // Chuyển đổi và thêm vào danh sách tổng
-            for (GeminiScoreResponse rankedUser : rankedUsers) {
-                ResUserDetailDTO userDetail = userDetailMap.get(rankedUser.getUserId());
-                if (userDetail != null) {
-                    allFoundCandidates.add(new ResCandidateWithScoreDTO(rankedUser.getScore(), userDetail));
-                }
-            }
-        }
-
-        System.out
-                .println("LOG: Finished processing all chunks. Total candidates scored: " + allFoundCandidates.size());
-
-        // 4. Sắp xếp danh sách tổng MỘT LẦN DUY NHẤT
-        System.out.println("LOG: Sorting the final list of " + allFoundCandidates.size() + " candidates...");
-        allFoundCandidates.sort(Comparator.comparingInt(ResCandidateWithScoreDTO::getScore).reversed());
-
-        // 5. Lưu trạng thái cuối cùng vào cache
-        state.setFoundCandidates(allFoundCandidates);
-        Cache cache = cacheManager.getCache("jobMatches"); // Dùng chung cache "jobMatches"
+        // Lưu trạng thái ban đầu vào cache
+        Cache cache = cacheManager.getCache("jobMatches");
         cache.put(searchId, state);
-        System.out.println("LOG: Final sorted list saved to cache with searchId: " + searchId);
+        System.out.println("LOG: Initial state saved to cache with searchId: " + searchId);
 
-        // 6. Phân trang và trả về trang đầu tiên
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), allFoundCandidates.size());
+        // Lấy kết quả cho trang đầu
+        List<ResCandidateWithScoreDTO> paginatedResult = state.getFoundCandidates().stream()
+                .limit(pageable.getPageSize()).collect(Collectors.toList());
 
-        List<ResCandidateWithScoreDTO> paginatedResult = (start >= allFoundCandidates.size())
-                ? Collections.emptyList()
-                : allFoundCandidates.subList(start, end);
+        ResultPaginationDTO.Meta meta = createCandidateMeta(state, pageable);
 
-        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
-        meta.setPage(pageable.getPageNumber() + 1);
-        meta.setPageSize(pageable.getPageSize());
-        meta.setPages((int) Math.ceil((double) allFoundCandidates.size() / pageable.getPageSize()));
-        meta.setTotal(allFoundCandidates.size());
-
-        System.out.println("LOG: <<< [END] Candidate search initiated successfully. Returning first page.");
+        System.out.println("LOG: <<< [END] On-demand candidate search initiated. Returning first page.");
         return new ResInitiateCandidateSearchDTO(paginatedResult, meta, searchId);
     }
 
     /**
-     * Lấy kết quả tìm kiếm ứng viên từ cache dựa trên searchId.
+     * Lấy các trang kết quả tiếp theo, xử lý thêm ứng viên nếu cần.
      */
     public ResFindCandidatesDTO getCandidateSearchResults(String searchId, Pageable pageable)
             throws IdInvalidException {
@@ -236,31 +183,110 @@ public class GeminiService {
         CandidateSearchState state = cache.get(searchId, CandidateSearchState.class);
 
         if (state == null) {
-            System.err.println("LOG-ERROR: Search session not found or expired for searchId: " + searchId);
-            throw new IdInvalidException("Phiên tìm kiếm ứng viên không tồn tại hoặc đã hết hạn. Vui lòng thử lại.");
+            throw new IdInvalidException("Phiên tìm kiếm ứng viên không tồn tại hoặc đã hết hạn.");
         }
 
-        System.out.println(
-                "LOG: Cache hit! Found state with " + state.getFoundCandidates().size() + " total sorted candidates.");
+        // Tính toán số lượng ứng viên cần có để hiển thị trang hiện tại
+        int targetSize = (pageable.getPageNumber() + 1) * pageable.getPageSize();
 
-        // Danh sách đã được sắp xếp sẵn, chỉ cần phân trang
-        List<ResCandidateWithScoreDTO> allFoundCandidates = state.getFoundCandidates();
+        // Nếu số ứng viên đã tìm thấy không đủ và vẫn còn ứng viên tiềm năng -> xử lý
+        // tiếp
+        if (state.getFoundCandidates().size() < targetSize && !state.isFullyProcessed()) {
+            System.out.println("LOG: Not enough candidates for page " + (pageable.getPageNumber() + 1)
+                    + ". Processing more chunks...");
+            processCandidateChunks(state, targetSize);
+            // Cập nhật lại trạng thái mới vào cache
+            cache.put(searchId, state);
+            System.out.println("LOG: State updated in cache after processing more chunks.");
+        }
 
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), allFoundCandidates.size());
+        // Phân trang trên danh sách kết quả hiện có
+        List<ResCandidateWithScoreDTO> paginatedResult = state.getFoundCandidates().stream()
+                .skip(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .collect(Collectors.toList());
 
-        List<ResCandidateWithScoreDTO> paginatedResult = (start >= allFoundCandidates.size())
-                ? Collections.emptyList()
-                : allFoundCandidates.subList(start, end);
-
-        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
-        meta.setPage(pageable.getPageNumber() + 1);
-        meta.setPageSize(pageable.getPageSize());
-        meta.setPages((int) Math.ceil((double) allFoundCandidates.size() / pageable.getPageSize()));
-        meta.setTotal(allFoundCandidates.size());
+        ResultPaginationDTO.Meta meta = createCandidateMeta(state, pageable);
 
         System.out.println("LOG: <<< [END] Returning page " + meta.getPage() + " of candidate results.");
         return new ResFindCandidatesDTO(paginatedResult, meta);
+    }
+
+    /**
+     * PHƯƠNG THỨC CỐT LÕI MỚI: Xử lý các cụm Ứng viên theo yêu cầu
+     */
+    private void processCandidateChunks(CandidateSearchState state, int targetFoundSize) {
+        // Tiếp tục xử lý chừng nào chưa đủ kết quả VÀ vẫn còn user tiềm năng
+        while (state.getFoundCandidates().size() < targetFoundSize && !state.isFullyProcessed()) {
+            int startIndex = state.getLastProcessedIndex();
+            if (startIndex >= state.getPotentialUserIds().size()) {
+                state.setFullyProcessed(true); // Đánh dấu đã xử lý hết
+                System.out.println("LOG: All potential candidates have been processed.");
+                break;
+            }
+
+            int endIndex = Math.min(startIndex + CANDIDATE_CHUNK_SIZE, state.getPotentialUserIds().size());
+            List<Long> currentChunkIds = state.getPotentialUserIds().subList(startIndex, endIndex);
+
+            // Lấy thông tin user cho cụm hiện tại
+            List<User> usersToProcess = this.userRepository.findAllById(currentChunkIds);
+            List<ResUserDetailDTO> chunkUserDetails = usersToProcess.stream()
+                    .map(ResUserDetailDTO::convertToDTO)
+                    .collect(Collectors.toList());
+
+            if (!chunkUserDetails.isEmpty()) {
+                System.out.println("LOG: Processing chunk from index " + startIndex + " to " + endIndex);
+
+                // Gọi AI để chấm điểm cho cụm này
+                List<GeminiScoreResponse> rankedUsers = rankUsersWithGemini(state.getJobDescription(),
+                        chunkUserDetails);
+
+                Map<Long, ResUserDetailDTO> userMap = chunkUserDetails.stream()
+                        .collect(Collectors.toMap(ResUserDetailDTO::getId, Function.identity()));
+
+                // Thêm kết quả vào danh sách, không sắp xếp lại
+                for (GeminiScoreResponse rankedUser : rankedUsers) {
+                    ResUserDetailDTO userDetail = userMap.get(rankedUser.getUserId());
+                    if (userDetail != null) {
+                        state.getFoundCandidates().add(new ResCandidateWithScoreDTO(rankedUser.getScore(), userDetail));
+                    }
+                }
+            }
+
+            // Cập nhật lại con trỏ vị trí đã xử lý
+            state.setLastProcessedIndex(endIndex);
+
+            // Thêm độ trễ để tránh lỗi 429
+            if (!state.isFullyProcessed() && state.getFoundCandidates().size() < targetFoundSize) {
+                try {
+                    System.out.println("LOG: Delaying for 1 second before next API call...");
+                    TimeUnit.SECONDS.sleep(1);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    System.err.println("LOG-ERROR: Thread was interrupted during delay.");
+                }
+            }
+        }
+    }
+
+    /**
+     * Helper để tạo meta, tránh lặp code
+     */
+    private ResultPaginationDTO.Meta createCandidateMeta(CandidateSearchState state, Pageable pageable) {
+        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
+        long totalFound = state.getFoundCandidates().size();
+
+        meta.setPage(pageable.getPageNumber() + 1);
+        meta.setPageSize(pageable.getPageSize());
+
+        // Total và Pages sẽ tăng dần khi có thêm kết quả
+        meta.setTotal(totalFound);
+        meta.setPages((int) Math.ceil((double) totalFound / pageable.getPageSize()));
+
+        // hasMore giờ sẽ hoạt động chính xác
+        meta.setHasMore(!state.isFullyProcessed() && (meta.getPage() < meta.getPages()));
+
+        return meta;
     }
 
     // ================= END: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================

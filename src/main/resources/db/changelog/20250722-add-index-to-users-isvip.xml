@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="add-index-for-is-vip-in-users-table" author="your-email@example.com">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists indexName="idx_users_is_vip" tableName="users"/>
+            </not>
+        </preConditions>
+        <createIndex indexName="idx_users_is_vip" tableName="users">
+            <column name="is_vip"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_users_is_vip" tableName="users"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
