@@ -6,5 +6,7 @@
                         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <include file="db/changelog/20250717-add-fulltext-index-to-jobs-table.xml"/>
+    <include file="db/changelog/20250722-add-fulltext-index-to-users-resumes.xml"/>
+
     
     </databaseChangeLog>

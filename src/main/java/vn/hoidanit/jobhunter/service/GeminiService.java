@@ -24,8 +24,10 @@ import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.response.ResCandidateWithScoreDTO;
 import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
+import vn.hoidanit.jobhunter.domain.response.ResInitiateCandidateSearchDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDetailDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.domain.response.ai.CandidateSearchState;
 import vn.hoidanit.jobhunter.domain.response.ai.ResCvEvaluationDTO;
 import vn.hoidanit.jobhunter.domain.response.ai.SearchState;
 import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
@@ -45,6 +47,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class GeminiService {
+    private static final int CANDIDATE_CHUNK_SIZE = 50;
+
     private static final int CHUNK_SIZE = 100;
 
     // ... (Giữ nguyên các biến và constructor)
@@ -76,90 +80,265 @@ public class GeminiService {
         this.cacheManager = cacheManager;
     }
 
-    public ResFindCandidatesDTO findCandidates(String jobDescription) throws IdInvalidException {
-        List<ResCandidateWithScoreDTO> suitableCandidates = new ArrayList<>();
-        ResultPaginationDTO.Meta lastMeta = null;
-        int currentPage = 0;
-        final int PAGE_SIZE = 200;
-        final int TARGET_CANDIDATES = 10;
+    // public ResFindCandidatesDTO findCandidates(String jobDescription) throws
+    // IdInvalidException {
+    // List<ResCandidateWithScoreDTO> suitableCandidates = new ArrayList<>();
+    // ResultPaginationDTO.Meta lastMeta = null;
+    // int currentPage = 0;
+    // final int PAGE_SIZE = 200;
+    // final int TARGET_CANDIDATES = 10;
+    //
+    // while (suitableCandidates.size() < TARGET_CANDIDATES) {
+    // Pageable pageable = PageRequest.of(currentPage, PAGE_SIZE);
+    // ResultPaginationDTO paginatedUsers = userService.fetchAllUserDetails(null,
+    // pageable);
+    // lastMeta = paginatedUsers.getMeta();
+    //
+    // @SuppressWarnings("unchecked")
+    // List<ResUserDetailDTO> currentUsers = (List<ResUserDetailDTO>)
+    // paginatedUsers.getResult();
+    // if (currentUsers.isEmpty()) {
+    // break; // Hết người dùng để kiểm tra
+    // }
+    //
+    // // Chuyển danh sách thành Map để tra cứu nhanh hơn
+    // Map<Long, ResUserDetailDTO> userMap = currentUsers.stream()
+    // .collect(Collectors.toMap(ResUserDetailDTO::getId, Function.identity()));
+    //
+    // List<GeminiScoreResponse> rankedUsers = rankUsersWithGemini(jobDescription,
+    // currentUsers);
+    //
+    // for (GeminiScoreResponse rankedUser : rankedUsers) {
+    // if (suitableCandidates.size() >= TARGET_CANDIDATES)
+    // break;
+    //
+    // ResUserDetailDTO userDetail = userMap.get(rankedUser.getUserId());
+    // if (userDetail != null) {
+    // suitableCandidates.add(new ResCandidateWithScoreDTO(rankedUser.getScore(),
+    // userDetail));
+    // }
+    // }
+    //
+    // currentPage++;
+    // }
+    //
+    // // Sắp xếp danh sách cuối cùng theo điểm số giảm dần
+    // suitableCandidates.sort(Comparator.comparingInt(ResCandidateWithScoreDTO::getScore).reversed());
+    //
+    // return new ResFindCandidatesDTO(suitableCandidates, lastMeta);
+    // }
 
-        while (suitableCandidates.size() < TARGET_CANDIDATES) {
-            Pageable pageable = PageRequest.of(currentPage, PAGE_SIZE);
-            ResultPaginationDTO paginatedUsers = userService.fetchAllUserDetails(null, pageable);
-            lastMeta = paginatedUsers.getMeta();
+    // ================= START: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================
 
-            @SuppressWarnings("unchecked")
-            List<ResUserDetailDTO> currentUsers = (List<ResUserDetailDTO>) paginatedUsers.getResult();
-            if (currentUsers.isEmpty()) {
-                break; // Hết người dùng để kiểm tra
-            }
+    /**
+     * Khởi tạo một phiên tìm kiếm ứng viên mới.
+     * Xử lý TOÀN BỘ ứng viên tiềm năng, gọi AI, sắp xếp, và lưu vào cache.
+     * Trả về trang đầu tiên của kết quả.
+     */
+    public ResInitiateCandidateSearchDTO initiateCandidateSearch(String jobDescription, Pageable pageable)
+            throws IdInvalidException {
+        System.out.println("LOG: >>> [START] Initiating new candidate search...");
 
-            // Chuyển danh sách thành Map để tra cứu nhanh hơn
-            Map<Long, ResUserDetailDTO> userMap = currentUsers.stream()
-                    .collect(Collectors.toMap(ResUserDetailDTO::getId, Function.identity()));
+        // BƯỚC 1: Trích xuất từ khóa từ Job Description (logic đơn giản)
+        Set<String> keywordsSet = extractKeywords("", jobDescription); // Dùng lại hàm helper có sẵn
+        String keywords = String.join(" ", keywordsSet);
 
-            List<GeminiScoreResponse> rankedUsers = rankUsersWithGemini(jobDescription, currentUsers);
+        // BƯỚC 2: LẤY USER ĐÃ LỌC SƠ BỘ bằng FTS thay vì findAll()
+        final int PRE_FILTER_LIMIT = 50; // Giới hạn số lượng ứng viên để gửi cho AI
+        List<User> allUsers = this.userRepository.preFilterCandidatesByKeywords(keywords, PRE_FILTER_LIMIT);
 
-            for (GeminiScoreResponse rankedUser : rankedUsers) {
-                if (suitableCandidates.size() >= TARGET_CANDIDATES)
-                    break;
+        // Phần còn lại của logic gần như giữ nguyên
+        List<Long> potentialUserIds = allUsers.stream().map(User::getId).collect(Collectors.toList());
+        System.out.println("LOG: Found " + potentialUserIds.size() + " potential candidates after FTS pre-filtering.");
 
-                ResUserDetailDTO userDetail = userMap.get(rankedUser.getUserId());
-                if (userDetail != null) {
-                    suitableCandidates.add(new ResCandidateWithScoreDTO(rankedUser.getScore(), userDetail));
-                }
-            }
-
-            currentPage++;
+        if (potentialUserIds.isEmpty()) {
+            return new ResInitiateCandidateSearchDTO(Collections.emptyList(), new ResultPaginationDTO.Meta(),
+                    "no_users_found");
         }
 
-        // Sắp xếp danh sách cuối cùng theo điểm số giảm dần
-        suitableCandidates.sort(Comparator.comparingInt(ResCandidateWithScoreDTO::getScore).reversed());
+        // Tạo một map để tra cứu thông tin chi tiết của user nhanh chóng
+        Map<Long, ResUserDetailDTO> userDetailMap = allUsers.stream()
+                .collect(Collectors.toMap(User::getId, ResUserDetailDTO::convertToDTO));
 
-        return new ResFindCandidatesDTO(suitableCandidates, lastMeta);
+        // 2. Tạo searchId và State object
+        String searchId = "candidate_search:" + SecurityUtil.hash(jobDescription + System.currentTimeMillis());
+        CandidateSearchState state = new CandidateSearchState();
+        state.setJobDescription(jobDescription);
+        state.setPotentialUserIds(potentialUserIds);
+
+        // 3. Xử lý toàn bộ ứng viên theo từng cụm (chunk)
+        List<ResCandidateWithScoreDTO> allFoundCandidates = new ArrayList<>();
+        int totalChunks = (int) Math.ceil((double) potentialUserIds.size() / CANDIDATE_CHUNK_SIZE);
+
+        for (int i = 0; i < totalChunks; i++) {
+            int startIndex = i * CANDIDATE_CHUNK_SIZE;
+            int endIndex = Math.min(startIndex + CANDIDATE_CHUNK_SIZE, potentialUserIds.size());
+            List<Long> chunkIds = potentialUserIds.subList(startIndex, endIndex);
+
+            // Lấy DTO từ map đã tạo
+            List<ResUserDetailDTO> chunkUserDetails = chunkIds.stream()
+                    .map(userDetailMap::get)
+                    .collect(Collectors.toList());
+
+            System.out.println("LOG: Processing chunk " + (i + 1) + "/" + totalChunks + " with "
+                    + chunkUserDetails.size() + " candidates.");
+
+            // Gọi Gemini để chấm điểm cho cụm này
+            List<GeminiScoreResponse> rankedUsers = rankUsersWithGemini(jobDescription, chunkUserDetails);
+
+            // Chuyển đổi và thêm vào danh sách tổng
+            for (GeminiScoreResponse rankedUser : rankedUsers) {
+                ResUserDetailDTO userDetail = userDetailMap.get(rankedUser.getUserId());
+                if (userDetail != null) {
+                    allFoundCandidates.add(new ResCandidateWithScoreDTO(rankedUser.getScore(), userDetail));
+                }
+            }
+        }
+
+        System.out
+                .println("LOG: Finished processing all chunks. Total candidates scored: " + allFoundCandidates.size());
+
+        // 4. Sắp xếp danh sách tổng MỘT LẦN DUY NHẤT
+        System.out.println("LOG: Sorting the final list of " + allFoundCandidates.size() + " candidates...");
+        allFoundCandidates.sort(Comparator.comparingInt(ResCandidateWithScoreDTO::getScore).reversed());
+
+        // 5. Lưu trạng thái cuối cùng vào cache
+        state.setFoundCandidates(allFoundCandidates);
+        Cache cache = cacheManager.getCache("jobMatches"); // Dùng chung cache "jobMatches"
+        cache.put(searchId, state);
+        System.out.println("LOG: Final sorted list saved to cache with searchId: " + searchId);
+
+        // 6. Phân trang và trả về trang đầu tiên
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), allFoundCandidates.size());
+
+        List<ResCandidateWithScoreDTO> paginatedResult = (start >= allFoundCandidates.size())
+                ? Collections.emptyList()
+                : allFoundCandidates.subList(start, end);
+
+        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
+        meta.setPage(pageable.getPageNumber() + 1);
+        meta.setPageSize(pageable.getPageSize());
+        meta.setPages((int) Math.ceil((double) allFoundCandidates.size() / pageable.getPageSize()));
+        meta.setTotal(allFoundCandidates.size());
+
+        System.out.println("LOG: <<< [END] Candidate search initiated successfully. Returning first page.");
+        return new ResInitiateCandidateSearchDTO(paginatedResult, meta, searchId);
     }
+
+    /**
+     * Lấy kết quả tìm kiếm ứng viên từ cache dựa trên searchId.
+     */
+    public ResFindCandidatesDTO getCandidateSearchResults(String searchId, Pageable pageable)
+            throws IdInvalidException {
+        System.out.println("LOG: >>> [START] Fetching candidate search results for searchId: " + searchId);
+        Cache cache = cacheManager.getCache("jobMatches");
+        CandidateSearchState state = cache.get(searchId, CandidateSearchState.class);
+
+        if (state == null) {
+            System.err.println("LOG-ERROR: Search session not found or expired for searchId: " + searchId);
+            throw new IdInvalidException("Phiên tìm kiếm ứng viên không tồn tại hoặc đã hết hạn. Vui lòng thử lại.");
+        }
+
+        System.out.println(
+                "LOG: Cache hit! Found state with " + state.getFoundCandidates().size() + " total sorted candidates.");
+
+        // Danh sách đã được sắp xếp sẵn, chỉ cần phân trang
+        List<ResCandidateWithScoreDTO> allFoundCandidates = state.getFoundCandidates();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), allFoundCandidates.size());
+
+        List<ResCandidateWithScoreDTO> paginatedResult = (start >= allFoundCandidates.size())
+                ? Collections.emptyList()
+                : allFoundCandidates.subList(start, end);
+
+        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
+        meta.setPage(pageable.getPageNumber() + 1);
+        meta.setPageSize(pageable.getPageSize());
+        meta.setPages((int) Math.ceil((double) allFoundCandidates.size() / pageable.getPageSize()));
+        meta.setTotal(allFoundCandidates.size());
+
+        System.out.println("LOG: <<< [END] Returning page " + meta.getPage() + " of candidate results.");
+        return new ResFindCandidatesDTO(paginatedResult, meta);
+    }
+
+    // ================= END: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================
 
     /**
      * ĐÃ CẬP NHẬT: Gửi nội dung text của CV thay vì file base64
      */
     private List<GeminiScoreResponse> rankUsersWithGemini(String jobDescription, List<ResUserDetailDTO> users) {
+        System.out.println("LOG: --- Calling Gemini API to rank " + users.size() + " users ---");
         List<Map<String, Object>> parts = new ArrayList<>();
 
         String initialPrompt = "You are an expert HR assistant. Based on the following job description, please analyze each candidate. "
-                + "Each candidate's information is provided as a combination of structured JSON data and their resume text (if available). "
-                + "Prioritize the information in the resume text. "
+                + "Each candidate's information is provided as a combination of structured JSON data and their combined resume text (if available). "
+                + "Prioritize the information in the combined resume text. "
                 + "\n\nJob Description:\n\"" + jobDescription + "\"\n\n";
         parts.add(Map.of("text", initialPrompt));
 
-        for (ResUserDetailDTO user : users) {
+        for (ResUserDetailDTO userDetail : users) {
             try {
-                String resumeFileName = user.getMainResume();
-                user.setMainResume(null); // Tạm thời set null để không đưa vào JSON
-                String userJson = objectMapper.writeValueAsString(user);
-                user.setMainResume(resumeFileName); // Gán lại
+                // Lấy User entity đầy đủ để truy cập OnlineResume và MainResume
+                User userEntity = this.userService.fetchUserById(userDetail.getId());
+                if (userEntity == null)
+                    continue;
 
-                parts.add(Map.of("text", "Candidate data: " + userJson));
+                System.out.println("LOG:   - Preparing data for User ID: " + userEntity.getId());
 
-                if (resumeFileName != null && !resumeFileName.isEmpty()) {
-                    // Trích xuất text từ file thay vì đọc bytes và encode
-                    String resumeText = fileService.extractTextFromStoredFile(resumeFileName, "resumes");
-                    if (resumeText != null && !resumeText.trim().isEmpty()) {
-                        parts.add(Map.of("text", "Candidate Resume Text:\n" + resumeText));
-                    } else {
-                        parts.add(Map.of("text", "Candidate has a resume file, but no text could be extracted."));
+                StringBuilder combinedResumeText = new StringBuilder();
+
+                // 1. Xử lý OnlineResume
+                if (userEntity.getOnlineResume() != null) {
+                    String onlineResumeText = buildTextFromOnlineResume(userEntity);
+                    if (!onlineResumeText.isEmpty()) {
+                        combinedResumeText.append("--- ONLINE RESUME ---\n");
+                        combinedResumeText.append(onlineResumeText).append("\n\n");
+                        System.out.println("LOG:     + Added Online Resume text.");
                     }
-                } else {
-                    parts.add(Map.of("text", "Candidate has no resume file."));
                 }
 
-            } catch (IOException | URISyntaxException e) {
+                // 2. Xử lý MainResume (file)
+                String mainResumeFileName = userEntity.getMainResume();
+                if (mainResumeFileName != null && !mainResumeFileName.isEmpty()) {
+                    try {
+                        String fileResumeText = fileService.extractTextFromStoredFile(mainResumeFileName, "resumes");
+                        if (fileResumeText != null && !fileResumeText.trim().isEmpty()) {
+                            combinedResumeText.append("--- UPLOADED CV FILE ---\n");
+                            combinedResumeText.append(fileResumeText).append("\n");
+                            System.out.println("LOG:     + Added Main Resume (file) text.");
+                        }
+                    } catch (IOException | URISyntaxException e) {
+                        System.err.println("LOG-WARN: Could not extract text from file " + mainResumeFileName
+                                + " for user " + userEntity.getId() + ": " + e.getMessage());
+                    }
+                }
+
+                // Chuẩn bị JSON (loại bỏ resume file name để tránh trùng lặp)
+                userDetail.setMainResume(null);
+                String userJson = objectMapper.writeValueAsString(userDetail);
+                userDetail.setMainResume(mainResumeFileName); // Gán lại
+
+                parts.add(Map.of("text", "Candidate data (JSON): " + userJson));
+
+                // Thêm phần text resume đã gộp
+                if (combinedResumeText.length() > 0) {
+                    parts.add(Map.of("text", "Candidate Combined Resume Text:\n" + combinedResumeText.toString()));
+                } else {
+                    parts.add(Map.of("text", "Candidate has no resume text available."));
+                    System.out.println("LOG:     - User " + userEntity.getId() + " has no resume text.");
+                }
+
+            } catch (Exception e) {
                 System.err.println(
-                        "Error processing user data or file for user ID " + user.getId() + ": " + e.getMessage());
+                        "LOG-ERROR: Error processing user data or file for user ID " + userDetail.getId() + ": "
+                                + e.getMessage());
             }
         }
 
         String finalPrompt = "\n\nAfter analyzing all candidates, return a JSON array of objects. Each object must have two keys: 'userId' (a number) and 'score' (a number from 0 to 100 representing how well they match the job description). "
-                + "Only include candidates who are a good match. Rank the array from the highest score to the lowest. "
+                + "Only include candidates who are a good match (score > 50). Rank the array from the highest score to the lowest. "
                 + "Response (JSON array of objects only):";
         parts.add(Map.of("text", finalPrompt));
 

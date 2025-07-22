@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
+import vn.hoidanit.jobhunter.domain.response.ResInitiateCandidateSearchDTO;
 import vn.hoidanit.jobhunter.domain.response.ai.ResCvEvaluationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResFindJobsDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResInitiateSearchDTO;
@@ -27,11 +28,38 @@ public class GeminiController {
         this.fileService = fileService;
     }
 
-    @PostMapping("/find-candidates")
-    @ApiMessage("Tìm ứng viên phù hợp bằng Gemini")
-    public ResponseEntity<ResFindCandidatesDTO> findCandidates(
+    // @PostMapping("/find-candidates")
+    // @ApiMessage("Tìm ứng viên phù hợp bằng Gemini")
+    // public ResponseEntity<ResFindCandidatesDTO> findCandidates(
+    // @RequestParam(name = "jobDescription", required = false) String
+    // jobDescription,
+    // @RequestParam(name = "file", required = false) MultipartFile file) throws
+    // IdInvalidException, IOException {
+    //
+    // String finalJobDescription = jobDescription;
+    //
+    // if (file != null && !file.isEmpty()) {
+    // finalJobDescription = fileService.extractTextFromFile(file);
+    // }
+    //
+    // if (finalJobDescription == null || finalJobDescription.trim().isEmpty()) {
+    // throw new IdInvalidException("Vui lòng cung cấp mô tả công việc bằng văn bản
+    // hoặc file.");
+    // }
+    //
+    // ResFindCandidatesDTO result =
+    // geminiService.findCandidates(finalJobDescription);
+    // return ResponseEntity.ok(result);
+    // }
+
+    // ================= START: API TÌM KIẾM ỨNG VIÊN MỚI =================
+
+    @PostMapping("/initiate-candidate-search")
+    @ApiMessage("Bước 1: Khởi tạo tìm kiếm ứng viên, xử lý và nhận trang đầu tiên")
+    public ResponseEntity<ResInitiateCandidateSearchDTO> initiateCandidateSearch(
             @RequestParam(name = "jobDescription", required = false) String jobDescription,
-            @RequestParam(name = "file", required = false) MultipartFile file) throws IdInvalidException, IOException {
+            @RequestParam(name = "file", required = false) MultipartFile file,
+            Pageable pageable) throws IdInvalidException, IOException {
 
         String finalJobDescription = jobDescription;
 
@@ -43,9 +71,21 @@ public class GeminiController {
             throw new IdInvalidException("Vui lòng cung cấp mô tả công việc bằng văn bản hoặc file.");
         }
 
-        ResFindCandidatesDTO result = geminiService.findCandidates(finalJobDescription);
+        ResInitiateCandidateSearchDTO result = geminiService.initiateCandidateSearch(finalJobDescription, pageable);
         return ResponseEntity.ok(result);
     }
+
+    @GetMapping("/candidate-search-results")
+    @ApiMessage("Bước 2: Lấy các trang kết quả ứng viên tiếp theo bằng searchId")
+    public ResponseEntity<ResFindCandidatesDTO> getCandidateSearchResults(
+            @RequestParam("searchId") String searchId,
+            Pageable pageable) throws IdInvalidException {
+
+        ResFindCandidatesDTO result = geminiService.getCandidateSearchResults(searchId, pageable);
+        return ResponseEntity.ok(result);
+    }
+
+    // ================= END: API TÌM KIẾM ỨNG VIÊN MỚI =================
 
     // @PostMapping("/find-jobs")
     // @ApiMessage("Tìm công việc phù hợp dựa trên CV hoặc kỹ năng")

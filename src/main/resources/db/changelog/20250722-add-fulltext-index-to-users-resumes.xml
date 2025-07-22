@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+<changeSet id="add-fulltext-index-to-onlineresumes" author="your-email@example.com">
+    <preConditions onFail="MARK_RAN">
+        <not>
+            <indexExists indexName="ft_resumes_text" tableName="online_resumes"/>
+        </not>
+    </preConditions>
+    <sql>
+        ALTER TABLE online_resumes ADD FULLTEXT INDEX ft_resumes_text (title, full_name, summary, certifications, educations, languages);
+    </sql>
+    <rollback>
+        <sql>
+            DROP INDEX ft_resumes_text ON online_resumes;
+        </sql>
+    </rollback>
+</changeSet>
+    <changeSet id="add-fulltext-index-to-users-name" author="your-email@example.com">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists indexName="ft_users_name_address" tableName="users"/>
+            </not>
+        </preConditions>
+        <sql>
+            ALTER TABLE users ADD FULLTEXT INDEX ft_users_name_address (name, address);
+        </sql>
+        <rollback>
+            <sql>
+                DROP INDEX ft_users_name_address ON users;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
