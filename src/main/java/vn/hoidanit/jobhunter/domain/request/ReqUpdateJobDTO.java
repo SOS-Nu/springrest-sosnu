@@ -22,6 +22,8 @@ public class ReqUpdateJobDTO {
     @NotBlank(message = "Địa điểm không được để trống")
     private String location;
 
+    private String address;
+
     @NotNull(message = "Lương không được để trống")
     private Double salary;
 

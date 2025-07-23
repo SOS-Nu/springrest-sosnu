@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.turkraft.springfilter.boot.Filter;
 import com.turkraft.springfilter.builder.FilterBuilder;
 import com.turkraft.springfilter.converter.FilterSpecificationConverter;
+
+import jakarta.persistence.criteria.Join;
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
 import vn.hoidanit.jobhunter.domain.entity.Company;
@@ -29,6 +31,7 @@ import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.resume.ResCreateResumeDTO;
 import vn.hoidanit.jobhunter.domain.response.resume.ResFetchResumeDTO;
 import vn.hoidanit.jobhunter.domain.response.resume.ResUpdateResumeDTO;
+import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.service.ChatMessageService;
 import vn.hoidanit.jobhunter.service.ResumeService;
 import vn.hoidanit.jobhunter.service.UserService;
@@ -49,19 +52,21 @@ public class ResumeController {
     private final FilterSpecificationConverter filterSpecificationConverter;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatMessageService chatMessageService;
+    private final JobRepository jobRepository; // Thêm JobRepository
 
     public ResumeController(
             ResumeService resumeService,
             UserService userService,
             FilterBuilder filterBuilder,
             FilterSpecificationConverter filterSpecificationConverter, SimpMessagingTemplate messagingTemplate,
-            ChatMessageService chatMessageService) {
+            ChatMessageService chatMessageService, JobRepository jobRepository) {
         this.resumeService = resumeService;
         this.userService = userService;
         this.filterBuilder = filterBuilder;
         this.filterSpecificationConverter = filterSpecificationConverter;
         this.chatMessageService = chatMessageService;
         this.messagingTemplate = messagingTemplate;
+        this.jobRepository = jobRepository;
     }
 
     @PostMapping("/resumes")
@@ -127,28 +132,42 @@ public class ResumeController {
             @Filter Specification<Resume> spec,
             Pageable pageable) {
 
-        List<Long> arrJobIds = null;
-        String email = SecurityUtil.getCurrentUserLogin().isPresent() == true
-                ? SecurityUtil.getCurrentUserLogin().get()
-                : "";
-        User currentUser = this.userService.handleGetUserByUsername(email);
-        if (currentUser != null) {
-            Company userCompany = currentUser.getCompany();
-            if (userCompany != null) {
-                List<Job> companyJobs = userCompany.getJobs();
-                if (companyJobs != null && companyJobs.size() > 0) {
-                    arrJobIds = companyJobs.stream().map(x -> x.getId())
-                            .collect(Collectors.toList());
-                }
+        Optional<String> currentUserLoginOpt = SecurityUtil.getCurrentUserLogin();
+
+        // TRƯỜNG HỢP 1: NGƯỜI DÙNG ĐÃ ĐĂNG NHẬP
+        if (currentUserLoginOpt.isPresent()) {
+            User currentUser = this.userService.handleGetUserByUsername(currentUserLoginOpt.get());
+
+            // TRƯỜNG HỢP 1A: HỢP LỆ - USER THUỘC MỘT CÔNG TY
+            if (currentUser != null && currentUser.getCompany() != null) {
+
+                long companyId = currentUser.getCompany().getId();
+
+                // Tạo Specification để lọc các Resume dựa trên companyId của Job
+                Specification<Resume> resumesByCompanySpec = (root, query, criteriaBuilder) -> {
+                    Join<Resume, Job> jobJoin = root.join("job");
+                    Join<Job, Company> companyJoin = jobJoin.join("company");
+                    return criteriaBuilder.equal(companyJoin.get("id"), companyId);
+                };
+
+                // Kết hợp bộ lọc từ client và bộ lọc bảo mật của server
+                Specification<Resume> finalSpec = spec.and(resumesByCompanySpec);
+
+                // Trả về kết quả đã lọc
+                return ResponseEntity.ok().body(this.resumeService.fetchAllResume(finalSpec, pageable));
+            }
+            // TRƯỜNG HỢP 1B: KHÔNG HỢP LỆ - USER ĐĂNG NHẬP NHƯNG KHÔNG CÓ CÔNG TY (ỨNG
+            // VIÊN)
+            else {
+                // Trả về danh sách rỗng, không cho phép xem dữ liệu
+                return ResponseEntity.ok().body(new ResultPaginationDTO());
             }
         }
-
-        Specification<Resume> jobInSpec = filterSpecificationConverter.convert(filterBuilder.field("job")
-                .in(filterBuilder.input(arrJobIds)).get());
-
-        Specification<Resume> finalSpec = jobInSpec.and(spec);
-
-        return ResponseEntity.ok().body(this.resumeService.fetchAllResume(finalSpec, pageable));
+        // TRƯỜNG HỢP 2: KHÔNG HỢP LỆ - NGƯỜI DÙNG KHÔNG ĐĂNG NHẬP (ANONYMOUS)
+        else {
+            // Trả về danh sách rỗng, không cho phép xem dữ liệu
+            return ResponseEntity.ok().body(new ResultPaginationDTO());
+        }
     }
 
     @PostMapping("/resumes/by-user")

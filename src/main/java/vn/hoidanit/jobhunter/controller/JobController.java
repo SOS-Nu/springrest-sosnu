@@ -36,6 +36,7 @@ public class JobController {
 
     public JobController(JobService jobService) {
         this.jobService = jobService;
+
     }
 
     @PostMapping("/jobs")
@@ -110,15 +111,15 @@ public class JobController {
 
         return ResponseEntity.ok(jobService.fetchJobsByCompany(companyId, spec, pageable));
     }
+
     @PostMapping("/jobs/by-user-company")
     @ApiMessage("Create a job for user's company")
-        public ResponseEntity<ResCreateJobDTO> createForUserCompany(@Valid @RequestBody ReqCreateJobDTO jobDTO)
-                throws IdInvalidException {
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(this.jobService.createForUserCompany(jobDTO));
-        }
-    
-        
+    public ResponseEntity<ResCreateJobDTO> createForUserCompany(@Valid @RequestBody ReqCreateJobDTO jobDTO)
+            throws IdInvalidException {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(this.jobService.createForUserCompany(jobDTO));
+    }
+
     @PutMapping("/jobs/by-user-company")
     @ApiMessage("Update a job for user's company")
     public ResponseEntity<ResUpdateJobDTO> updateForUserCompany(@Valid @RequestBody ReqUpdateJobDTO jobDTO)
@@ -126,7 +127,7 @@ public class JobController {
         return ResponseEntity.ok()
                 .body(this.jobService.updateForUserCompany(jobDTO));
     }
-    
+
     @DeleteMapping("/jobs/by-user-company/{id}")
     @ApiMessage("Delete a job for user's company")
     public ResponseEntity<Void> deleteForUserCompany(@PathVariable("id") long id) throws IdInvalidException {

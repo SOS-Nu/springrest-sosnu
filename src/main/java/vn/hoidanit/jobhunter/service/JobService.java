@@ -124,6 +124,8 @@ public class JobService {
         Job job = new Job();
         job.setName(jobDTO.getName());
         job.setLocation(jobDTO.getLocation());
+        job.setAddress(jobDTO.getAddress());
+
         job.setSalary(jobDTO.getSalary());
         job.setQuantity(jobDTO.getQuantity());
         job.setLevel(jobDTO.getLevel());
@@ -264,6 +266,7 @@ public class JobService {
         // Cập nhật thông tin job
         jobInDB.setName(jobDTO.getName());
         jobInDB.setLocation(jobDTO.getLocation());
+        jobInDB.setAddress(jobDTO.getAddress());
         jobInDB.setSalary(jobDTO.getSalary());
         jobInDB.setQuantity(jobDTO.getQuantity());
         jobInDB.setLevel(jobDTO.getLevel());

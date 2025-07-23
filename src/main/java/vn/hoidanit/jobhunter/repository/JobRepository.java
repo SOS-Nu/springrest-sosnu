@@ -75,4 +75,7 @@ public interface JobRepository extends JpaRepository<Job, Long>,
    */
   @Query("SELECT j FROM Job j JOIN j.skills s WHERE j.active = true AND s.name IN :skillNames")
   List<Job> findActiveBySkillNames(@Param("skillNames") Set<String> skillNames);
+
+  List<Job> findByCompany_Id(long companyId);
+
 }
