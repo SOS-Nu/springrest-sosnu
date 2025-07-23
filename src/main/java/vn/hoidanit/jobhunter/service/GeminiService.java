@@ -256,6 +256,13 @@ public class GeminiService {
             // Cập nhật lại con trỏ vị trí đã xử lý
             state.setLastProcessedIndex(endIndex);
 
+            // =================================================================
+            // >>> FIX: THÊM KIỂM TRA CUỐI CÙNG SAU VÒNG LẶP <<<
+            // =================================================================
+            if (state.getLastProcessedIndex() >= state.getPotentialUserIds().size()) {
+                state.setFullyProcessed(true);
+            }
+
             // Thêm độ trễ để tránh lỗi 429
             if (!state.isFullyProcessed() && state.getFoundCandidates().size() < targetFoundSize) {
                 try {
@@ -283,8 +290,12 @@ public class GeminiService {
         meta.setTotal(totalFound);
         meta.setPages((int) Math.ceil((double) totalFound / pageable.getPageSize()));
 
-        // hasMore giờ sẽ hoạt động chính xác
-        meta.setHasMore(!state.isFullyProcessed() && (meta.getPage() < meta.getPages()));
+        // =================================================================
+        // >>> FIX QUAN TRỌNG: ĐẢM BẢO `hasMore` LUÔN DỰA VÀO ĐÂY <<<
+        // Dòng này sẽ tính toán `hasMore` một cách chính xác sau khi
+        // lỗi ở Phần 1 đã được sửa.
+        // =================================================================
+        meta.setHasMore(!state.isFullyProcessed());
 
         return meta;
     }
