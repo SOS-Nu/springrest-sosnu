@@ -77,6 +77,24 @@ public class ResOnlineResumeDTO {
         return dto;
     }
 
+    // nếu các phương thức convertToCreateDTO và convertToUpdateDTO vẫn cần dùng
+    // Hoặc mặc định isPublic là true cho các trường hợp đó.
+    // Dưới đây là cách đơn giản nhất là overload phương thức.
+
+    private static void mapBaseFields(BaseResumeDTO dto, OnlineResume resume) {
+        // Mặc định là public khi không truyền cờ, phù hợp cho create/update
+        mapBaseFields(dto, resume, true);
+    }
+
+    public static ResGetOnlineResumeDTO convertToGetDTO(OnlineResume resume, boolean isPublic) {
+        ResGetOnlineResumeDTO dto = new ResGetOnlineResumeDTO();
+        mapBaseFields(dto, resume, isPublic);
+        dto.setCreatedAt(resume.getCreatedAt());
+        dto.setUpdatedAt(resume.getUpdatedAt());
+        return dto;
+    }
+
+    // polymophism
     public static ResGetOnlineResumeDTO convertToGetDTO(OnlineResume resume) {
         ResGetOnlineResumeDTO dto = new ResGetOnlineResumeDTO();
         mapBaseFields(dto, resume);
@@ -85,13 +103,21 @@ public class ResOnlineResumeDTO {
         return dto;
     }
 
-    private static void mapBaseFields(BaseResumeDTO dto, OnlineResume resume) {
+    private static void mapBaseFields(BaseResumeDTO dto, OnlineResume resume, boolean isPublic) {
         dto.setId(resume.getId());
         dto.setTitle(resume.getTitle());
         dto.setFullName(resume.getFullName());
-        dto.setEmail(resume.getEmail());
-        dto.setPhone(resume.getPhone());
-        dto.setAddress(resume.getAddress());
+        if (isPublic) {
+            dto.setPhone(resume.getPhone());
+            dto.setAddress(resume.getAddress());
+            dto.setEmail(resume.getEmail());
+
+        } else {
+            dto.setPhone(null);
+            dto.setAddress(null);
+            dto.setEmail(null);
+
+        }
         dto.setSummary(resume.getSummary());
         dto.setCertifications(resume.getCertifications());
         dto.setEducations(resume.getEducations());
@@ -114,4 +140,5 @@ public class ResOnlineResumeDTO {
             dto.setUser(userInfo);
         }
     }
+
 }

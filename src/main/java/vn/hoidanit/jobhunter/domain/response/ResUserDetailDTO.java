@@ -49,7 +49,7 @@ public class ResUserDetailDTO {
 
         // Map thông tin OnlineResume nếu có
         if (user.getOnlineResume() != null) {
-            dto.setOnlineResume(ResOnlineResumeDTO.convertToGetDTO(user.getOnlineResume()));
+            dto.setOnlineResume(ResOnlineResumeDTO.convertToGetDTO(user.getOnlineResume(), user.isPublic()));
         }
 
         // Map danh sách WorkExperience nếu có
