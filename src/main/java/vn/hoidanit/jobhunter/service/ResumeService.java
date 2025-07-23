@@ -53,7 +53,8 @@ public class ResumeService {
     public ResumeService(
             ResumeRepository resumeRepository,
             UserRepository userRepository,
-            UserService userService, JobRepository jobRepository,GeminiService geminiService, FileService fileService) {
+            UserService userService, JobRepository jobRepository, GeminiService geminiService,
+            FileService fileService) {
         this.resumeRepository = resumeRepository;
         this.userRepository = userRepository;
         this.jobRepository = jobRepository;
@@ -87,54 +88,67 @@ public class ResumeService {
 
     @Transactional
     public ResCreateResumeDTO create(Resume resume) throws IdInvalidException {
+        // Lấy thông tin user đang đăng nhập
         String email = SecurityUtil.getCurrentUserLogin().orElseThrow(
-                () -> new IdInvalidException("Bạn cần đăng nhập để rải CV"));
+                () -> new IdInvalidException("Bạn cần đăng nhập để nộp CV"));
 
-        if (!userService.canSubmitCv(email)) {
-            throw new IdInvalidException("Bạn đã hết lượt rải CV trong tháng này. Hãy nâng cấp lên VIP để rải thêm!");
+        User currentUser = this.userService.fetchUserByEmail(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Không tìm thấy người dùng với email: " + email);
         }
 
         // Lấy thông tin Job đầy đủ
         Job job = this.jobRepository.findById(resume.getJob().getId())
-                    .orElseThrow(() -> new IdInvalidException("Job với id=" + resume.getJob().getId() + " không tồn tại"));
-        
-        // Gán lại Job và User đầy đủ cho đối tượng resume
-        resume.setJob(job);
-        this.userRepository.findById(resume.getUser().getId()).ifPresent(resume::setUser);
+                .orElseThrow(() -> new IdInvalidException("Job với id=" + resume.getJob().getId() + " không tồn tại"));
 
-        // LOGIC CHẤM ĐIỂM
+        // >>> LOGIC MỚI: KIỂM TRA ĐÃ APPLY HAY CHƯA <<<
+        // Sử dụng phương thức mới trong repository để kiểm tra
+        if (this.resumeRepository.existsByUser_IdAndJob_Id(currentUser.getId(), job.getId())) {
+            throw new IdInvalidException("Bạn đã apply vào job này rồi");
+        }
+        // >>> KẾT THÚC LOGIC MỚI <<<
+
+        // Kiểm tra lượt submit CV
+        if (!userService.canSubmitCv(email)) {
+            throw new IdInvalidException("Bạn đã hết lượt nộp CV trong tháng này. Hãy nâng cấp lên VIP để nộp thêm!");
+        }
+
+        // Gán lại User và Job đầy đủ cho đối tượng resume để đảm bảo tính toàn vẹn
+        resume.setUser(currentUser);
+        resume.setJob(job);
+
+        // LOGIC CHẤM ĐIỂM (giữ nguyên)
         int score = 0;
         String cvFileName = resume.getUrl();
         System.out.println("Bắt đầu chấm điểm cho CV: " + cvFileName);
 
-        if (cvFileName == null || cvFileName.isEmpty()) {
-            System.out.println("CV không có file đính kèm (url is null). Bỏ qua chấm điểm.");
-        } else {
+        if (cvFileName != null && !cvFileName.isEmpty()) {
             try {
-                // SỬA LỖI TẠI ĐÂY: đổi "resumes" thành "resume"
-                byte[] cvFileBytes = this.fileService.readFileAsBytes(cvFileName, "resume"); 
+                byte[] cvFileBytes = this.fileService.readFileAsBytes(cvFileName, "resume");
                 if (cvFileBytes != null) {
                     System.out.println("Đã đọc file CV thành công. Đang gửi tới Gemini để chấm điểm...");
                     score = this.geminiService.scoreCvAgainstJob(job, cvFileBytes, cvFileName);
                     System.out.println("Gemini đã trả về điểm số: " + score);
                 } else {
-                     System.out.println("Không tìm thấy file CV '" + cvFileName + "' trong thư mục storage/resume.");
+                    System.out.println("Không tìm thấy file CV '" + cvFileName + "' trong thư mục storage/resume.");
                 }
             } catch (Exception e) {
-                System.err.println("Lỗi nghiêm trọng khi chấm điểm CV bằng Gemini cho job " + job.getId() + ": " + e.getMessage());
+                System.err.println(
+                        "Lỗi nghiêm trọng khi chấm điểm CV bằng Gemini cho job " + job.getId() + ": " + e.getMessage());
                 e.printStackTrace();
             }
         }
-        
+
         resume.setScore(score);
 
         // Lưu resume với điểm số vào DB
         Resume savedResume = this.resumeRepository.save(resume);
-        System.out.println("Đã lưu Resume vào DB với id=" + savedResume.getId() + " và score=" + savedResume.getScore());
-        
+        System.out
+                .println("Đã lưu Resume vào DB với id=" + savedResume.getId() + " và score=" + savedResume.getScore());
+
         userService.incrementCvSubmission(email);
 
-        // Trả về DTO
+        // Trả về DTO (giữ nguyên)
         ResCreateResumeDTO res = new ResCreateResumeDTO();
         res.setId(savedResume.getId());
         res.setCreatedBy(savedResume.getCreatedBy());
@@ -143,7 +157,7 @@ public class ResumeService {
         return res;
     }
 
-   @Transactional // Sử dụng Transactional để đảm bảo tính toàn vẹn dữ liệu
+    @Transactional // Sử dụng Transactional để đảm bảo tính toàn vẹn dữ liệu
     public ResUpdateResumeDTO update(Resume resume) {
         // Lấy thông tin job liên quan đến resume này
         Job jobToUpdate = resume.getJob();
@@ -179,38 +193,38 @@ public class ResumeService {
     }
 
     // Đặt tại: vn.hoidanit.jobhunter.service.ResumeService
-public ResFetchResumeDTO getResume(Resume resume) {
-    ResFetchResumeDTO res = new ResFetchResumeDTO();
-    res.setId(resume.getId());
-    // Bỏ dòng res.setEmail(resume.getEmail()); ở đây
+    public ResFetchResumeDTO getResume(Resume resume) {
+        ResFetchResumeDTO res = new ResFetchResumeDTO();
+        res.setId(resume.getId());
+        // Bỏ dòng res.setEmail(resume.getEmail()); ở đây
 
-    res.setUrl(resume.getUrl());
-    res.setStatus(resume.getStatus());
-    res.setCreatedAt(resume.getCreatedAt());
-    res.setCreatedBy(resume.getCreatedBy());
-    res.setUpdatedAt(resume.getUpdatedAt());
-    res.setUpdatedBy(resume.getUpdatedBy());
-    res.setScore(resume.getScore());
+        res.setUrl(resume.getUrl());
+        res.setStatus(resume.getStatus());
+        res.setCreatedAt(resume.getCreatedAt());
+        res.setCreatedBy(resume.getCreatedBy());
+        res.setUpdatedAt(resume.getUpdatedAt());
+        res.setUpdatedBy(resume.getUpdatedBy());
+        res.setScore(resume.getScore());
 
-    if (resume.getJob() != null) {
-        res.setCompanyName(resume.getJob().getCompany().getName());
+        if (resume.getJob() != null) {
+            res.setCompanyName(resume.getJob().getCompany().getName());
+        }
+
+        User resumeOwner = resume.getUser(); // Lấy thông tin người đã nộp CV
+
+        // LOGIC MỚI: Chỉ hiện email nếu người dùng đó là public
+        if (resumeOwner != null && resumeOwner.isPublic()) {
+            res.setEmail(resume.getEmail());
+        } else {
+            // Nếu isPublic là false (hoặc user không tồn tại), không trả về email
+            res.setEmail(null);
+        }
+
+        res.setUser(new ResFetchResumeDTO.UserResume(resumeOwner.getId(), resumeOwner.getName()));
+        res.setJob(new ResFetchResumeDTO.JobResume(resume.getJob().getId(), resume.getJob().getName()));
+
+        return res;
     }
-
-    User resumeOwner = resume.getUser(); // Lấy thông tin người đã nộp CV
-
-    // LOGIC MỚI: Chỉ hiện email nếu người dùng đó là public
-    if (resumeOwner != null && resumeOwner.isPublic()) {
-        res.setEmail(resume.getEmail());
-    } else {
-        // Nếu isPublic là false (hoặc user không tồn tại), không trả về email
-        res.setEmail(null); 
-    }
-
-    res.setUser(new ResFetchResumeDTO.UserResume(resumeOwner.getId(), resumeOwner.getName()));
-    res.setJob(new ResFetchResumeDTO.JobResume(resume.getJob().getId(), resume.getJob().getName()));
-
-    return res;
-}
 
     public ResultPaginationDTO fetchAllResume(Specification<Resume> spec, Pageable pageable) {
         Page<Resume> pageUser = this.resumeRepository.findAll(spec, pageable);

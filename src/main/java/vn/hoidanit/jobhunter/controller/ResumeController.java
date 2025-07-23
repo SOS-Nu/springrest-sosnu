@@ -67,14 +67,20 @@ public class ResumeController {
     @PostMapping("/resumes")
     @ApiMessage("Create a resume")
     public ResponseEntity<ResCreateResumeDTO> create(@Valid @RequestBody Resume resume) throws IdInvalidException {
-        // check id exists
-        boolean isIdExist = this.resumeService.checkResumeExistByUserAndJob(resume);
-        if (!isIdExist) {
-            throw new IdInvalidException("User id/Job id không tồn tại");
-        }
+        // XÓA BỎ KHỐI LỆNH KIỂM TRA NÀY
+        // Toàn bộ logic kiểm tra (job/user có tồn tại không, đã apply chưa)
+        // đã được chuyển vào ResumeService.create()
+        /*
+         * boolean isIdExist = this.resumeService.checkResumeExistByUserAndJob(resume);
+         * if (!isIdExist) {
+         * throw new IdInvalidException("User id/Job id không tồn tại");
+         * }
+         */
 
-        // create new resume
-        return ResponseEntity.status(HttpStatus.CREATED).body(this.resumeService.create(resume));
+        // Chỉ cần gọi service, service sẽ tự xử lý và ném exception nếu cần
+        ResCreateResumeDTO newResumeDto = this.resumeService.create(resume);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(newResumeDto);
     }
 
     @PutMapping("/resumes")
