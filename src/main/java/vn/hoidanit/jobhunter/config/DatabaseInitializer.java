@@ -3,6 +3,7 @@ package vn.hoidanit.jobhunter.config;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -21,21 +22,52 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate; // <<< THÊM DÒNG NÀY
 
     public DatabaseInitializer(
             PermissionRepository permissionRepository,
             RoleRepository roleRepository,
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder, JdbcTemplate jdbcTemplate) {
         this.permissionRepository = permissionRepository;
         this.roleRepository = roleRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    // TẠO MỘT HÀM MỚI ĐỂ CHẠY SQL
+    private void initFullTextIndex() {
+        System.out.println(">>> STARTING CREATE FULLTEXT INDEXES...");
+        try {
+            // Tách mỗi lệnh SQL thành một phần tử riêng trong mảng
+            String[] sqlCommands = {
+                    "ALTER TABLE jobs ADD FULLTEXT INDEX ft_jobs_name_desc (name, description)",
+                    "ALTER TABLE online_resumes ADD FULLTEXT INDEX ft_resumes_text (title, full_name, summary, certifications, educations, languages)",
+                    "ALTER TABLE users ADD FULLTEXT INDEX ft_users_name_address (name, address)",
+                    "CREATE INDEX IF NOT EXISTS idx_users_is_vip ON users (is_vip)"
+            };
+
+            // Dùng vòng lặp để chạy từng lệnh một
+            for (String sql : sqlCommands) {
+                System.out.println("Executing: " + sql); // In ra lệnh đang chạy để dễ theo dõi
+                jdbcTemplate.execute(sql);
+            }
+
+            System.out.println(">>> CREATE FULLTEXT INDEXES SUCCESS!");
+        } catch (Exception e) {
+            System.err.println(">>> FAILED TO CREATE FULLTEXT INDEXES: " + e.getMessage());
+            // In ra chi tiết lỗi để gỡ lỗi dễ hơn trong tương lai
+            e.printStackTrace();
+        }
     }
 
     @Override
     public void run(String... args) throws Exception {
         System.out.println(">>> START INIT DATABASE");
+
+        initFullTextIndex();
+
         long countPermissions = this.permissionRepository.count();
         long countRoles = this.roleRepository.count();
         long countUsers = this.userRepository.count();
