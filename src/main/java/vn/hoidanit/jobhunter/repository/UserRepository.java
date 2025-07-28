@@ -1,6 +1,7 @@
 package vn.hoidanit.jobhunter.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -65,4 +66,13 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
         @Query("SELECT u FROM User u LEFT JOIN FETCH u.company LEFT JOIN FETCH u.role WHERE u.id IN :ids")
         List<User> findByIdInWithCompanyAndRole(@Param("ids") List<Long> ids);
 
+        // GHI ĐÈ PHƯƠNG THỨC findAllById ĐỂ ÁP DỤNG ENTITY GRAPH
+        @Override
+        @EntityGraph(value = "graph.user.details")
+        List<User> findAllById(Iterable<Long> ids);
+
+        // THÊM @Query VÀO ĐÂY
+        @EntityGraph(value = "graph.user.details")
+        @Query("SELECT u FROM User u WHERE u.id = :id")
+        Optional<User> findByIdWithDetails(@Param("id") Long id);
 }

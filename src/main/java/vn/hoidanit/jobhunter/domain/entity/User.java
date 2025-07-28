@@ -3,6 +3,9 @@ package vn.hoidanit.jobhunter.domain.entity;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+
+import org.hibernate.annotations.BatchSize;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.CascadeType;
@@ -32,20 +35,18 @@ import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @NamedEntityGraph(name = "graph.user.role", attributeNodes = { @NamedAttributeNode("role") })
-@NamedEntityGraph(name = "graph.user.details", // Đặt tên graph mới
-        attributeNodes = {
-                @NamedAttributeNode("company"),
-                @NamedAttributeNode("role"),
-                @NamedAttributeNode("onlineResume"),
-                @NamedAttributeNode("workExperiences"),
-                @NamedAttributeNode(value = "resumes", subgraph = "subgraph.resume.details"),
-                @NamedAttributeNode("paymentHistories")
-        }, subgraphs = {
-                @NamedSubgraph(name = "subgraph.resume.details", // Subgraph cho Resumes
-                        attributeNodes = { @NamedAttributeNode(value = "job", subgraph = "subgraph.job.company") }),
-                @NamedSubgraph(name = "subgraph.job.company", // Subgraph cho Job để lấy Company
-                        attributeNodes = { @NamedAttributeNode("company") })
-        })
+@NamedEntityGraph(name = "graph.user.details", attributeNodes = {
+        @NamedAttributeNode("company"),
+        @NamedAttributeNode("role"),
+        @NamedAttributeNode("onlineResume"),
+        // CHỈ GIỮ LẠI MỘT LIST
+        @NamedAttributeNode(value = "resumes", subgraph = "subgraph.resume.details")
+// LOẠI BỎ workExperiences VÀ paymentHistories KHỎI GRAPH NÀY
+}, subgraphs = {
+        @NamedSubgraph(name = "subgraph.resume.details", attributeNodes = {
+                @NamedAttributeNode(value = "job", subgraph = "subgraph.job.company") }),
+        @NamedSubgraph(name = "subgraph.job.company", attributeNodes = { @NamedAttributeNode("company") })
+})
 @Entity
 @Table(name = "users")
 @Getter
@@ -86,6 +87,7 @@ public class User {
     @Column(columnDefinition = "boolean default true")
     private boolean isPublic = true;
 
+    @BatchSize(size = 25)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<PaymentHistory> paymentHistories;
@@ -106,6 +108,7 @@ public class User {
     @JoinColumn(name = "online_resume_id", referencedColumnName = "id")
     private OnlineResume onlineResume;
 
+    @BatchSize(size = 25) // THÊM DÒNG NÀY
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkExperience> workExperiences;
 

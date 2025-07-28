@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import vn.hoidanit.jobhunter.domain.response.PaymentUrlResponseDTO;
 import vn.hoidanit.jobhunter.domain.response.RestResponse;
@@ -39,28 +40,32 @@ public class PaymentController {
     private final UserService userService;
     private final PaymentHistoryRepository paymentHistoryRepository;
 
-    @Value("${vnp_TmnCode}")
+    @Value("${vnp.TmnCode}")
     private String vnpTmnCode;
 
-    @Value("${vnp_HashSecret}")
+    @Value("${vnp.HashSecret}")
     private String vnpHashSecret;
 
-    @Value("${vnp_Url}")
+    @Value("${vnp.Url}")
     private String vnpPaymentUrl;
 
-    @Value("${vnp_ReturnUrl}")
+    @Value("${vnp.ReturnUrl}")
     private String vnpReturnUrl;
 
-    @Value("${vnpay_version}")
+    @Value("${vnpay.version}")
     private String vnpVersion;
 
-    @Value("${vnpay_command}")
+    @Value("${vnpay.command}")
     private String vnpCommand;
 
     public PaymentController(UserService userService, PaymentHistoryRepository paymentHistoryRepository) {
         this.userService = userService;
         this.paymentHistoryRepository = paymentHistoryRepository;
-        System.out.println("PaymentController initialized with vnp_HashSecret: " + vnpHashSecret);
+    }
+
+    @PostConstruct
+    public void init() {
+        System.out.println("PaymentController initialized AFTER injection with vnp_HashSecret: " + vnpHashSecret);
     }
 
     @PostMapping("/payment/vnpay/create")

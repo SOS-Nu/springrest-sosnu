@@ -554,12 +554,11 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public ResUserDetailDTO fetchUserDetailById(long id) throws IdInvalidException {
-        User user = this.userRepository.findById(id)
+        // SỬA LẠI LỜI GỌI REPOSITORY
+        User user = this.userRepository.findByIdWithDetails(id) // << Dùng phương thức đã tối ưu
                 .orElseThrow(() -> new IdInvalidException("User với id = " + id + " không tồn tại"));
 
-        // Hibernate sẽ tự động fetch các collection (workExperiences) và object
-        // (onlineResume)
-        // do chúng ta truy cập chúng trong một phiên giao dịch (transactional session).
+        // Bây giờ tất cả dữ liệu đã được tải sẵn, không còn N+1
         return ResUserDetailDTO.convertToDTO(user);
     }
 
