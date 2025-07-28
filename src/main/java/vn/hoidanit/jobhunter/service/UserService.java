@@ -9,8 +9,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -458,8 +460,8 @@ public class UserService {
     }
 
     public List<ResUserDTO> findConnectedUsers(Long userId) {
-        // B1: Tìm tất cả các phòng chat mà userId này là người gửi hoặc người nhận.
-        List<ChatRoom> chatRooms = this.chatRoomRepository.findBySenderIdOrReceiverId(userId, userId);
+        // B1: Tìm tất cả các phòng chat và fetch sẵn user chỉ với MỘT query (Đã tối ưu)
+        List<ChatRoom> chatRooms = this.chatRoomRepository.findBySenderOrReceiverIdWithUsers(userId);
 
         // B2: Từ các phòng chat, trích xuất ID của người dùng còn lại (partner).
         Set<Long> partnerIds = chatRooms.stream()
@@ -468,24 +470,43 @@ public class UserService {
                         : chatRoom.getSender().getId())
                 .collect(Collectors.toSet());
 
-        // B3: Dựa vào danh sách ID partners, truy vấn thông tin User đầy đủ.
-        List<User> connectedUsers = this.userRepository.findAllById(partnerIds);
+        if (partnerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
 
-        // B4: Chuyển đổi User entity sang ResUserDTO và thêm tin nhắn cuối cùng
+        // B3: Dựa vào danh sách ID partners, truy vấn TẤT CẢ tin nhắn cuối cùng chỉ với
+        // MỘT query (Đã tối ưu)
+        List<ChatMessage> lastMessages = this.chatMessageRepository.findLastMessageForEachConversation(userId,
+                new ArrayList<>(partnerIds));
+
+        // B4: Chuyển danh sách tin nhắn cuối thành Map để tra cứu nhanh O(1)
+        // == SỬA LỖI Ở ĐÂY ==
+        // Tách logic lấy key ra một biến Function để giúp trình biên dịch suy luận kiểu
+        Function<ChatMessage, Long> keyMapper = msg -> msg.getSender().getId() == userId
+                ? msg.getReceiver().getId()
+                : msg.getSender().getId();
+
+        Map<Long, ChatMessage> lastMessageMap = lastMessages.stream()
+                .collect(Collectors.toMap(keyMapper, Function.identity()));
+        // == KẾT THÚC SỬA LỖI ==
+
+        // B5: Lấy thông tin User của các partner (ĐÃ TỐI ƯU)
+        // == SỬA Ở ĐÂY ==
+        List<User> connectedUsers = this.userRepository.findByIdInWithCompanyAndRole(new ArrayList<>(partnerIds));
+
+        // B6: Chuyển đổi User entity sang ResUserDTO và gán tin nhắn cuối từ Map (KHÔNG
+        // CÒN QUERY DB)
         return connectedUsers.stream()
                 .map(user -> {
-                    ResUserDTO dto = this.convertToResUserDTO(user); // Dùng lại hàm convert đã có
+                    ResUserDTO dto = this.convertToResUserDTO(user);
 
-                    // TÌM TIN NHẮN CUỐI CÙNG
-                    ChatMessage lastMsgEntity = this.chatMessageRepository.findLastMessageBetweenUsers(userId,
-                            user.getId());
+                    ChatMessage lastMsgEntity = lastMessageMap.get(user.getId());
 
                     if (lastMsgEntity != null) {
                         ResLastMessageDTO lastMsgDto = new ResLastMessageDTO(
                                 lastMsgEntity.getContent(),
                                 lastMsgEntity.getSender().getId(),
-                                lastMsgEntity.getTimeStamp().toInstant() // Chuyển Date sang Instant
-                        );
+                                lastMsgEntity.getTimeStamp().toInstant());
                         dto.setLastMessage(lastMsgDto);
                     }
 

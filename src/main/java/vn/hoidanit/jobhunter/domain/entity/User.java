@@ -16,6 +16,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
@@ -28,6 +31,21 @@ import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
+@NamedEntityGraph(name = "graph.user.role", attributeNodes = { @NamedAttributeNode("role") })
+@NamedEntityGraph(name = "graph.user.details", // Đặt tên graph mới
+        attributeNodes = {
+                @NamedAttributeNode("company"),
+                @NamedAttributeNode("role"),
+                @NamedAttributeNode("onlineResume"),
+                @NamedAttributeNode("workExperiences"),
+                @NamedAttributeNode(value = "resumes", subgraph = "subgraph.resume.details"),
+                @NamedAttributeNode("paymentHistories")
+        }, subgraphs = {
+                @NamedSubgraph(name = "subgraph.resume.details", // Subgraph cho Resumes
+                        attributeNodes = { @NamedAttributeNode(value = "job", subgraph = "subgraph.job.company") }),
+                @NamedSubgraph(name = "subgraph.job.company", // Subgraph cho Job để lấy Company
+                        attributeNodes = { @NamedAttributeNode("company") })
+        })
 @Entity
 @Table(name = "users")
 @Getter

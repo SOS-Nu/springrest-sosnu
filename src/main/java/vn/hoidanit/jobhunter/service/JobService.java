@@ -389,6 +389,14 @@ public class JobService {
         rs.setMeta(mt);
         rs.setResult(pageJob.getContent());
 
+        // THAY ĐỔI Ở ĐÂY: Chuyển đổi Job sang DTO trước khi trả về
+        List<ResFetchJobDTO> listJobDTO = pageJob.getContent()
+                .stream()
+                .map(this::convertToResFetchJobDTO)
+                .collect(Collectors.toList());
+
+        rs.setResult(listJobDTO); // Trả về danh sách DTO
+
         return rs;
     }
     // ========== CHANGE END ==========

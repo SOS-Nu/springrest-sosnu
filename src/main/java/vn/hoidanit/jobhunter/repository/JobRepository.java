@@ -4,6 +4,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -77,5 +81,10 @@ public interface JobRepository extends JpaRepository<Job, Long>,
   List<Job> findActiveBySkillNames(@Param("skillNames") Set<String> skillNames);
 
   List<Job> findByCompany_Id(long companyId);
+
+  // GHI ĐÈ PHƯƠG THỨC findAll VÀ GẮN ENTITY GRAPH
+  @Override
+  @EntityGraph(value = "graph.job.details")
+  Page<Job> findAll(Specification<Job> spec, Pageable pageable);
 
 }

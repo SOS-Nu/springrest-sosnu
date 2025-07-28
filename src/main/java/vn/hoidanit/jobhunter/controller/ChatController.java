@@ -1,9 +1,7 @@
 package vn.hoidanit.jobhunter.controller;
 
-import java.util.Date;
 import java.util.List;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -11,23 +9,18 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
+
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
-import vn.hoidanit.jobhunter.domain.entity.Resume;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.request.ChatNotificationDTO;
 import vn.hoidanit.jobhunter.domain.response.ResChatMessageDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
-import vn.hoidanit.jobhunter.domain.response.RestResponse;
 import vn.hoidanit.jobhunter.service.ChatMessageService;
 import vn.hoidanit.jobhunter.service.HeartbeatService;
 import vn.hoidanit.jobhunter.service.UserService;
-import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 class PingPayload {
@@ -62,7 +55,7 @@ public class ChatController {
 
     // update status online/ offline
     @MessageMapping("/user.addUser") // "/app/user.addUser"
-    @SendTo("/user/public") // subscribe
+    @SendTo("/topic/public") // SỬA Ở ĐÂY: Dùng /topic/ cho broadcast
     public User updateStatus(
             @Payload User user) {
         userService.updateStatus(user);
@@ -70,7 +63,7 @@ public class ChatController {
     }
 
     @MessageMapping("/user.disconnectUser")
-    @SendTo("/user/public")
+    @SendTo("/topic/public") // SỬA Ở ĐÂY: Dùng /topic/ cho broadcast
     public User disconnectUser(
             @Payload User user) {
         userService.disconnect(user);
