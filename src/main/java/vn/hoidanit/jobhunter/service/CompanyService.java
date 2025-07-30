@@ -1,6 +1,7 @@
 package vn.hoidanit.jobhunter.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -62,18 +63,6 @@ public class CompanyService {
         dto.setCreatedAt(company.getCreatedAt());
         dto.setUpdatedAt(company.getUpdatedAt());
 
-        // Lấy danh sách user thuộc công ty
-        List<User> users = this.userRepository.findByCompany(company);
-        if (users != null && !users.isEmpty()) {
-            // Giả sử chỉ lấy user đầu tiên làm đại diện (HR)
-            User hrUser = users.get(0);
-            ResFetchCompanyDTO.HrCompany hrCompany = new ResFetchCompanyDTO.HrCompany(
-                    hrUser.getId(),
-                    hrUser.getName(),
-                    hrUser.getEmail());
-            dto.setHrCompany(hrCompany);
-        }
-
         return dto;
     }
 
@@ -122,29 +111,10 @@ public class CompanyService {
         this.companyRepository.deleteById(id);
     }
 
-    public ResultPaginationDTO handleGetCompany(@Filter Specification<Company> spec, Pageable pageable) {
+    public ResultPaginationDTO handleGetCompany(Specification<Company> spec, Pageable pageable) {
+        // BƯỚC 1: Lấy danh sách Company theo trang (Query #1 - Hiệu quả)
         Page<Company> pCompany = this.companyRepository.findAll(spec, pageable);
-        List<Company> companies = pCompany.getContent();
-
-        // Convert to DTOs first
-        List<ResFetchCompanyDTO> dtoList = companies.stream()
-                .map(this::convertToResFetchCompanyDTO)
-                .collect(Collectors.toList());
-
-        // Efficiently fetch job counts if the list is not empty
-        if (!dtoList.isEmpty()) {
-            List<Long> companyIds = dtoList.stream().map(ResFetchCompanyDTO::getId).collect(Collectors.toList());
-
-            List<JobRepository.CompanyJobCountDTO> jobCounts = this.jobRepository
-                    .countActiveJobsByCompanyIds(companyIds);
-
-            Map<Long, Long> jobCountMap = jobCounts.stream()
-                    .collect(Collectors.toMap(JobRepository.CompanyJobCountDTO::getCompanyId,
-                            JobRepository.CompanyJobCountDTO::getJobCount));
-
-            // Populate totalJobs for each company DTO
-            dtoList.forEach(dto -> dto.setTotalJobs(jobCountMap.getOrDefault(dto.getId(), 0L)));
-        }
+        List<Company> companiesOnPage = pCompany.getContent();
 
         ResultPaginationDTO rs = new ResultPaginationDTO();
         ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
@@ -152,9 +122,60 @@ public class CompanyService {
         mt.setPageSize(pageable.getPageSize());
         mt.setPages(pCompany.getTotalPages());
         mt.setTotal(pCompany.getTotalElements());
-
         rs.setMeta(mt);
-        rs.setResult(dtoList); // Set the list of DTOs as the result
+
+        if (!companiesOnPage.isEmpty()) {
+            List<Long> companyIds = companiesOnPage.stream().map(Company::getId).collect(Collectors.toList());
+
+            // BƯỚC 2: Lấy user đại diện cho tất cả companies trên trang (Query #2 - Hiệu
+            // quả)
+            List<User> representativeUsers = this.userRepository.findFirstUserForCompanies(companyIds);
+            Map<Long, User> userMap = representativeUsers.stream()
+                    .collect(Collectors.toMap(u -> u.getCompany().getId(), u -> u));
+
+            // BƯỚC 3: Lấy số lượng job cho tất cả companies trên trang (Query #3 - Đã hiệu
+            // quả sẵn)
+            List<JobRepository.CompanyJobCountDTO> jobCounts = this.jobRepository
+                    .countActiveJobsByCompanyIds(companyIds);
+            Map<Long, Long> jobCountMap = jobCounts.stream()
+                    .collect(Collectors.toMap(JobRepository.CompanyJobCountDTO::getCompanyId,
+                            JobRepository.CompanyJobCountDTO::getJobCount));
+
+            // BƯỚC 4: Gộp kết quả trong bộ nhớ (Không tốn query)
+            List<ResFetchCompanyDTO> dtoList = companiesOnPage.stream().map(company -> {
+                ResFetchCompanyDTO dto = new ResFetchCompanyDTO();
+                // Map thông tin company
+                dto.setId(company.getId());
+                dto.setName(company.getName());
+                dto.setLogo(company.getLogo());
+                // ... các trường khác của company ...
+                dto.setAddress(company.getAddress());
+                dto.setDescription(company.getDescription());
+                dto.setCreatedAt(company.getCreatedAt());
+                dto.setUpdatedAt(company.getUpdatedAt());
+
+                // Map thông tin HR từ userMap
+                User hrUser = userMap.get(company.getId());
+                if (hrUser != null) {
+                    ResFetchCompanyDTO.HrCompany hrCompany = new ResFetchCompanyDTO.HrCompany(
+                            hrUser.getId(),
+                            hrUser.getName(),
+                            hrUser.getEmail());
+                    dto.setHrCompany(hrCompany);
+                }
+
+                // Map số lượng job từ jobCountMap
+                dto.setTotalJobs(jobCountMap.getOrDefault(company.getId(), 0L));
+
+                return dto;
+            }).collect(Collectors.toList());
+
+            rs.setResult(dtoList);
+        } else {
+            // Nếu trang không có công ty nào thì trả về mảng rỗng
+            rs.setResult(new ArrayList<ResFetchCompanyDTO>());
+        }
+
         return rs;
     }
 

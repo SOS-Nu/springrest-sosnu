@@ -72,7 +72,28 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
         List<User> findAllById(Iterable<Long> ids);
 
         // THÊM @Query VÀO ĐÂY
-        @EntityGraph(value = "graph.user.details")
-        @Query("SELECT u FROM User u WHERE u.id = :id")
+        @Query("SELECT u FROM User u " +
+                        "LEFT JOIN FETCH u.workExperiences " +
+                        "LEFT JOIN FETCH u.resumes r " +
+                        "LEFT JOIN FETCH r.job j " +
+                        "LEFT JOIN FETCH j.company " +
+                        "LEFT JOIN FETCH u.role " +
+                        "WHERE u.id = :id")
         Optional<User> findByIdWithDetails(@Param("id") Long id);
+
+        @Query("SELECT DISTINCT u FROM User u " +
+                        "LEFT JOIN FETCH u.workExperiences " +
+                        "LEFT JOIN FETCH u.resumes")
+        List<User> findAllWithDetails();
+
+        /**
+         * Lấy user đầu tiên (dựa trên ID nhỏ nhất) cho mỗi công ty trong danh sách.
+         * Dùng native query với window function để đạt hiệu suất cao nhất.
+         */
+        @Query(value = "WITH RankedUsers AS (" +
+                        "  SELECT u.*, ROW_NUMBER() OVER(PARTITION BY u.company_id ORDER BY u.id ASC) as rn " +
+                        "  FROM users u WHERE u.company_id IN :companyIds" +
+                        ") " +
+                        "SELECT * FROM RankedUsers WHERE rn = 1", nativeQuery = true)
+        List<User> findFirstUserForCompanies(@Param("companyIds") List<Long> companyIds);
 }

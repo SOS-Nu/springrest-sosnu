@@ -369,13 +369,14 @@ public class JobService {
         }
 
         Specification<Job> finalSpec = spec;
-        // Nếu không phải SUPER_ADMIN, thì chỉ lấy các job active = true
         if (!isSuperAdmin) {
             Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder
                     .equal(root.get("active"), true);
             finalSpec = spec.and(activeJobsSpec);
         }
 
+        // BƯỚC 1: Lấy một trang Job (chưa có company và skills)
+        // Câu lệnh này hiệu quả vì không fetch collection
         Page<Job> pageJob = this.jobRepository.findAll(finalSpec, pageable);
 
         ResultPaginationDTO rs = new ResultPaginationDTO();
@@ -385,17 +386,27 @@ public class JobService {
         mt.setPageSize(pageable.getPageSize());
         mt.setPages(pageJob.getTotalPages());
         mt.setTotal(pageJob.getTotalElements());
-
         rs.setMeta(mt);
-        rs.setResult(pageJob.getContent());
 
-        // THAY ĐỔI Ở ĐÂY: Chuyển đổi Job sang DTO trước khi trả về
-        List<ResFetchJobDTO> listJobDTO = pageJob.getContent()
+        // BƯỚC 2: Từ danh sách Job của trang hiện tại, fetch đầy đủ details
+        // Lấy nội dung (content) của trang
+        List<Job> jobsOnPage = pageJob.getContent();
+
+        // Tạo một list mới chứa ID để truy vấn lại
+        List<Long> jobIds = jobsOnPage.stream().map(Job::getId).collect(Collectors.toList());
+
+        // Dùng EntityGraph để fetch đầy đủ thông tin cho các jobs trên trang này
+        // findAllById sẽ tự động áp dụng EntityGraph nếu có
+        // Ta cần đảm bảo JobRepository có phương thức findByIdIn với EntityGraph
+        List<Job> jobsWithDetails = this.jobRepository.findAllById(jobIds);
+
+        // BƯỚC 3: Map từ danh sách đã có đầy đủ details sang DTO
+        List<ResFetchJobDTO> listJobDTO = jobsWithDetails
                 .stream()
                 .map(this::convertToResFetchJobDTO)
                 .collect(Collectors.toList());
 
-        rs.setResult(listJobDTO); // Trả về danh sách DTO
+        rs.setResult(listJobDTO);
 
         return rs;
     }

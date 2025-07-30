@@ -19,7 +19,6 @@ import vn.hoidanit.jobhunter.domain.request.ChatNotificationDTO;
 import vn.hoidanit.jobhunter.domain.response.ResChatMessageDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUserDTO;
 import vn.hoidanit.jobhunter.service.ChatMessageService;
-import vn.hoidanit.jobhunter.service.HeartbeatService;
 import vn.hoidanit.jobhunter.service.UserService;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
@@ -41,16 +40,15 @@ public class ChatController {
     private final UserService userService;
     private final ChatMessageService chatMessageService;
     private final SimpMessagingTemplate messagingTemplate;
-    private final HeartbeatService heartbeatService; // << INJECT SERVICE
+    // private final HeartbeatService heartbeatService; // << INJECT SERVICE
 
     public ChatController(
             UserService userService,
             ChatMessageService chatMessageService,
-            SimpMessagingTemplate messagingTemplate, HeartbeatService heartbeatService) {
+            SimpMessagingTemplate messagingTemplate) {
         this.userService = userService;
         this.chatMessageService = chatMessageService;
         this.messagingTemplate = messagingTemplate;
-        this.heartbeatService = heartbeatService;
     }
 
     // update status online/ offline
@@ -70,12 +68,12 @@ public class ChatController {
         return user;
     }
 
-    @MessageMapping("/heartbeat.ping")
-    public void handlePing(@Payload PingPayload payload) {
-        if (payload != null && payload.getEmail() != null) {
-            heartbeatService.ping(payload.getEmail());
-        }
-    }
+    // @MessageMapping("/heartbeat.ping")
+    // public void handlePing(@Payload PingPayload payload) {
+    // if (payload != null && payload.getEmail() != null) {
+    // heartbeatService.ping(payload.getEmail());
+    // }
+    // }
 
     @GetMapping("/users-connected")
     public ResponseEntity<List<ResUserDTO>> findConnectedUsers(@RequestParam("id") Long id) throws IdInvalidException {

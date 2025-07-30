@@ -82,9 +82,12 @@ public interface JobRepository extends JpaRepository<Job, Long>,
 
   List<Job> findByCompany_Id(long companyId);
 
-  // GHI ĐÈ PHƯƠG THỨC findAll VÀ GẮN ENTITY GRAPH
   @Override
   @EntityGraph(value = "graph.job.details")
-  Page<Job> findAll(Specification<Job> spec, Pageable pageable);
+  List<Job> findAllById(Iterable<Long> ids);
+
+  @EntityGraph(attributePaths = { "company", "skills" })
+  @Query("SELECT j FROM Job j WHERE j.active = true ORDER BY j.updatedAt DESC")
+  List<Job> findAllActiveJobs(Pageable pageable);
 
 }
