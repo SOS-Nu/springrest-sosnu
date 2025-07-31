@@ -148,7 +148,13 @@ public class CompanyService {
                 dto.setId(company.getId());
                 dto.setName(company.getName());
                 dto.setLogo(company.getLogo());
-                // ... các trường khác của company ...
+                dto.setField(company.getField());
+
+                dto.setFoundingYear(company.getFoundingYear());
+                dto.setLocation(company.getLocation());
+                dto.setCountry(company.getCountry());
+                dto.setScale(company.getScale());
+                dto.setWebsite(company.getWebsite());
                 dto.setAddress(company.getAddress());
                 dto.setDescription(company.getDescription());
                 dto.setCreatedAt(company.getCreatedAt());
