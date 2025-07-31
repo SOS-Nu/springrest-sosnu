@@ -1,20 +1,23 @@
 package vn.hoidanit.jobhunter.domain.response.job;
 
-import java.time.Instant;
-import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
+import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO.SkillInfo;
+
+import java.time.Instant;
+import java.util.List;
 
 @Getter
 @Setter
-public class ResFetchJobDTO {
+public class ResJobDTO {
     private long id;
     private String name;
     private String location;
-    private double salary;
+    private String address;
+
+    private SalaryInfo salary; // Sử dụng object lồng nhau
     private int quantity;
     private String level;
-    private String description;
     private Instant startDate;
     private Instant endDate;
     private boolean active;
@@ -22,8 +25,15 @@ public class ResFetchJobDTO {
     private Instant updatedAt;
     private String createdBy;
     private String updatedBy;
-    private CompanyInfo company;
     private List<SkillInfo> skills;
+    private CompanyInfo company;
+
+    @Getter
+    @Setter
+    public static class SalaryInfo {
+        private double value;
+        private String currency;
+    }
 
     @Getter
     @Setter
@@ -31,6 +41,7 @@ public class ResFetchJobDTO {
         private long id;
         private String name;
         private String logo;
+
     }
 
     @Getter

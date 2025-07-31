@@ -2,6 +2,8 @@ package vn.hoidanit.jobhunter.controller;
 
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.turkraft.springfilter.boot.Filter;
@@ -23,8 +26,10 @@ import vn.hoidanit.jobhunter.domain.request.ReqUpdateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
+import vn.hoidanit.jobhunter.domain.response.job.ResJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
 import vn.hoidanit.jobhunter.service.JobService;
+import vn.hoidanit.jobhunter.service.mapper.JobMapper;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
@@ -33,9 +38,11 @@ import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 public class JobController {
 
     private final JobService jobService;
+    private final JobMapper jobMapper;
 
-    public JobController(JobService jobService) {
+    public JobController(JobService jobService, JobMapper jobMapper) {
         this.jobService = jobService;
+        this.jobMapper = jobMapper;
 
     }
 
@@ -92,9 +99,26 @@ public class JobController {
     @ApiMessage("Get job with pagination")
     public ResponseEntity<ResultPaginationDTO> getAllJob(
             @Filter Specification<Job> spec,
-            Pageable pageable) {
+            Pageable pageable,
+            @RequestHeader(value = "Accept-Language", required = false, defaultValue = "vi") String language) {
 
-        return ResponseEntity.ok().body(this.jobService.fetchAll(spec, pageable));
+        Page<Job> jobPage = this.jobService.fetchAll(spec, pageable); // Service chỉ trả về Entity
+
+        // Dùng Mapper để chuyển đổi
+        List<ResJobDTO> resultDTO = this.jobMapper.toDto(jobPage.getContent(), language);
+
+        // Tạo response
+        ResultPaginationDTO response = new ResultPaginationDTO();
+        ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
+        meta.setPage(pageable.getPageNumber() + 1);
+        meta.setPageSize(pageable.getPageSize());
+        meta.setPages(jobPage.getTotalPages());
+        meta.setTotal(jobPage.getTotalElements());
+
+        response.setMeta(meta);
+        response.setResult(resultDTO);
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/jobs/by-company/{companyId}")

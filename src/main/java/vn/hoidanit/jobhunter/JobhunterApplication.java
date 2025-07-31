@@ -3,6 +3,7 @@ package vn.hoidanit.jobhunter;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -16,6 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 @EnableScheduling
 @EnableCaching // Bật tính năng Caching của Spring
+@EnableFeignClients // THÊM ANNOTATION NÀY
 public class JobhunterApplication {
 
 	public static void main(String[] args) {

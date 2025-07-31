@@ -355,7 +355,7 @@ public class JobService {
     }
 
     // ========== CHANGE START: Modified fetchAll method ==========
-    public ResultPaginationDTO fetchAll(Specification<Job> spec, Pageable pageable) {
+    public Page<Job> fetchAll(Specification<Job> spec, Pageable pageable) {
         // Lấy thông tin người dùng hiện tại
         Optional<String> currentUserLogin = SecurityUtil.getCurrentUserLogin();
         boolean isSuperAdmin = false;
@@ -408,7 +408,7 @@ public class JobService {
 
         rs.setResult(listJobDTO);
 
-        return rs;
+        return this.jobRepository.findAll(finalSpec, pageable);
     }
     // ========== CHANGE END ==========
 
@@ -549,6 +549,7 @@ public class JobService {
             ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
             companyInfo.setId(job.getCompany().getId());
             companyInfo.setName(job.getCompany().getName());
+            companyInfo.setLogo(job.getCompany().getLogo());
             dto.setCompany(companyInfo);
         }
 
