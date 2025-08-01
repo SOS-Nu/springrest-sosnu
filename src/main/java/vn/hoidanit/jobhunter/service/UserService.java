@@ -195,7 +195,6 @@ public class UserService {
             currentUser.setGender(reqUser.getGender());
             currentUser.setAge(reqUser.getAge());
             currentUser.setName(reqUser.getName());
-            currentUser.setAvatar(reqUser.getAvatar());
             currentUser.setVip(reqUser.isVip());
 
             if (reqUser.getCompany() != null) {
@@ -555,10 +554,18 @@ public class UserService {
     @Transactional(readOnly = true)
     public ResUserDetailDTO fetchUserDetailById(long id) throws IdInvalidException {
         // SỬA LẠI LỜI GỌI REPOSITORY
-        User user = this.userRepository.findByIdWithDetails(id) // << Dùng phương thức đã tối ưu
+        // Dùng phương thức mới sử dụng Entity Graph
+        User user = this.userRepository.findOneById(id)
                 .orElseThrow(() -> new IdInvalidException("User với id = " + id + " không tồn tại"));
 
-        // Bây giờ tất cả dữ liệu đã được tải sẵn, không còn N+1
+        // Khi dòng lệnh ResUserDetailDTO.convertToDTO(user) bên dưới được thực thi,
+        // nó sẽ gọi đến user.getWorkExperiences().
+        // Do phương thức này nằm trong một @Transactional, Hibernate sẽ tự động
+        // thực hiện một câu query thứ 2 để lấy danh sách workExperiences một cách an
+        // toàn.
+
+        // Tất cả dữ liệu bây giờ đã được tải đầy đủ mà không bị lỗi
+        // MultipleBagFetchException.
         return ResUserDetailDTO.convertToDTO(user);
     }
 

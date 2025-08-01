@@ -71,15 +71,13 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
         @EntityGraph(value = "graph.user.details")
         List<User> findAllById(Iterable<Long> ids);
 
-        // THÊM @Query VÀO ĐÂY
-        @Query("SELECT u FROM User u " +
-                        "LEFT JOIN FETCH u.workExperiences " +
-                        "LEFT JOIN FETCH u.resumes r " +
-                        "LEFT JOIN FETCH r.job j " +
-                        "LEFT JOIN FETCH j.company " +
-                        "LEFT JOIN FETCH u.role " +
-                        "WHERE u.id = :id")
-        Optional<User> findByIdWithDetails(@Param("id") Long id);
+        // THAY BẰNG PHƯƠNG THỨC MỚI NÀY
+        // Phương thức này sẽ dùng graph 'graph.user.details' mà bạn đã định nghĩa trong
+        // User.java
+        // Graph này đã được cấu hình cẩn thận để chỉ fetch 'resumes' (1 collection),
+        // tránh lỗi.
+        @EntityGraph(value = "graph.user.details")
+        Optional<User> findOneById(long id);
 
         @Query("SELECT DISTINCT u FROM User u " +
                         "LEFT JOIN FETCH u.workExperiences " +

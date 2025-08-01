@@ -62,9 +62,20 @@ public class GeminiController {
             Pageable pageable) throws IdInvalidException, IOException {
 
         String finalJobDescription = jobDescription;
+        boolean isFileUploaded = file != null && !file.isEmpty();
 
-        if (file != null && !file.isEmpty()) {
-            finalJobDescription = fileService.extractTextFromFile(file);
+        if (isFileUploaded) {
+            // >>> THAY ĐỔI CỐT LÕI <<<
+            // Đọc file thành byte array trước để đảm bảo an toàn,
+            // sau đó mới trích xuất text từ byte array đó.
+            byte[] fileBytes = file.getBytes();
+            String extractedText = fileService.extractTextFromBytes(fileBytes); // Sử dụng phương thức an toàn hơn
+
+            if (extractedText == null || extractedText.trim().isEmpty()) {
+                throw new IdInvalidException(
+                        "Không thể trích xuất nội dung văn bản từ file. File có thể trống hoặc bị lỗi.");
+            }
+            finalJobDescription = extractedText;
         }
 
         if (finalJobDescription == null || finalJobDescription.trim().isEmpty()) {

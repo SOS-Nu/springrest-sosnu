@@ -140,11 +140,29 @@ public class GeminiService {
             throws IdInvalidException {
         System.out.println("LOG: >>> [START] Initiating new ON-DEMAND candidate search...");
 
+        // <<< LOG MỚI >>>
+        // Log này để kiểm tra nội dung text thô nhận được từ controller.
+        System.out.println("LOG-DEBUG: Received raw job description text (length: "
+                + (jobDescription != null ? jobDescription.length() : 0) + ")");
+
         Set<String> keywordsSet = extractKeywords("", jobDescription);
+
+        // <<< LOG MỚI >>>
+        // Log này cực kỳ quan trọng, nó cho biết bộ từ khóa cuối cùng được tạo ra là
+        // gì.
+        System.out.println("LOG-DEBUG: Extracted keywords set: " + keywordsSet);
+
         String keywords = String.join(" ", keywordsSet);
 
-        final int PRE_FILTER_LIMIT = 1000; // gioi han ung vien tiem nang de tranh qua tai
+        // <<< LOG MỚI >>>
+        // Log này cho thấy chuỗi cuối cùng được truyền vào câu lệnh FTS. Nếu nó rỗng,
+        // FTS sẽ không tìm thấy gì.
+        System.out.println("LOG-DEBUG: Keywords string for FTS query: '" + keywords + "'");
+
+        final int PRE_FILTER_LIMIT = 1000;
         List<User> potentialUsers = this.userRepository.preFilterCandidatesByKeywords(keywords, PRE_FILTER_LIMIT);
+        System.out.println("LOG: Found " + potentialUsers.size() + " potential candidates after FTS pre-filtering.");
+
         List<Long> potentialUserIds = potentialUsers.stream().map(User::getId).collect(Collectors.toList());
         System.out.println("LOG: Found " + potentialUserIds.size() + " potential candidates after FTS pre-filtering.");
 
@@ -731,13 +749,22 @@ public class GeminiService {
         Set<String> keywords = new HashSet<>();
         String combinedText = (cvText != null ? cvText : "") + " "
                 + (skillsDescription != null ? skillsDescription : "");
-        if (combinedText.trim().isEmpty())
+        if (combinedText.trim().isEmpty()) {
             return keywords;
+        }
 
-        String[] words = combinedText.toLowerCase().split("[\\s,;\\n\\t()./]+");
+        String cleanedText = combinedText.toLowerCase()
+                .replaceAll("[^a-zA-Z0-9+#\\s-]", " ");
+
+        // <<< LOG MỚI >>>
+        // Log này để xem văn bản sau khi làm sạch có còn giữ lại các từ khóa mong muốn
+        // không.
+        System.out.println("LOG-DEBUG: Text after cleaning: '" + cleanedText.trim().replaceAll("\\s+", " ") + "'");
+
+        String[] words = cleanedText.split("\\s+");
+
         for (String word : words) {
-            // Lọc bỏ các từ quá ngắn hoặc không có nghĩa
-            if (word.length() > 1 && word.matches("[a-z0-9+#-]*[a-z0-9]")) {
+            if (word.length() > 1) {
                 keywords.add(word);
             }
         }
