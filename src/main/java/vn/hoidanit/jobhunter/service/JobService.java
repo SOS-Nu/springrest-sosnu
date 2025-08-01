@@ -32,7 +32,6 @@ import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.SkillRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
-import vn.hoidanit.jobhunter.util.constant.LevelEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
@@ -57,21 +56,12 @@ public class JobService {
     }
 
     public ResCreateJobDTO create(Job j) {
-        // check skills
         if (j.getSkills() != null) {
-            List<Long> reqSkills = j.getSkills()
-                    .stream().map(x -> x.getId())
-                    .collect(Collectors.toList());
-
+            List<Long> reqSkills = j.getSkills().stream().map(Skill::getId).collect(Collectors.toList());
             List<Skill> dbSkills = this.skillRepository.findByIdIn(reqSkills);
             j.setSkills(dbSkills);
-
         }
-
-        // create job
         Job currentJob = this.jobRepository.save(j);
-
-        // convert response
         ResCreateJobDTO dto = new ResCreateJobDTO();
         dto.setId(currentJob.getId());
         dto.setName(currentJob.getName());
@@ -85,47 +75,34 @@ public class JobService {
         dto.setCreatedAt(currentJob.getCreatedAt());
         dto.setCreatedBy(currentJob.getCreatedBy());
         dto.setAddress(currentJob.getAddress());
-
         if (currentJob.getSkills() != null) {
-            List<String> skills = currentJob.getSkills()
-                    .stream().map(item -> item.getName())
-                    .collect(Collectors.toList());
+            List<String> skills = currentJob.getSkills().stream().map(Skill::getName).collect(Collectors.toList());
             dto.setSkills(skills);
         }
-
         return dto;
     }
 
     public ResCreateJobDTO createForUserCompany(ReqCreateJobDTO jobDTO) throws IdInvalidException {
-        // Lấy thông tin người dùng hiện tại
         String email = SecurityUtil.getCurrentUserLogin()
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
-
         User user = userRepository.findByEmail(email);
         if (user == null) {
             throw new IdInvalidException("Người dùng không tồn tại");
         }
-
-        // Kiểm tra trạng thái VIP
         if (!user.isVip()
                 || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
             user.setVip(false);
             userRepository.save(user);
             throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công việc");
         }
-
-        // Kiểm tra công ty của người dùng
         Company company = user.getCompany();
         if (company == null) {
             throw new IdInvalidException("Người dùng không thuộc công ty nào");
         }
-
-        // Tạo job mới
         Job job = new Job();
         job.setName(jobDTO.getName());
         job.setLocation(jobDTO.getLocation());
         job.setAddress(jobDTO.getAddress());
-
         job.setSalary(jobDTO.getSalary());
         job.setQuantity(jobDTO.getQuantity());
         job.setLevel(jobDTO.getLevel());
@@ -134,25 +111,17 @@ public class JobService {
         job.setEndDate(jobDTO.getEndDate());
         job.setActive(jobDTO.isActive());
         job.setCompany(company);
-
-        // Xử lý skills
         if (jobDTO.getSkills() != null && !jobDTO.getSkills().isEmpty()) {
-            // Lấy ra danh sách ID từ List<SkillDTO>
             List<Long> skillIds = jobDTO.getSkills().stream()
                     .map(ReqCreateJobDTO.SkillDTO::getId)
                     .collect(Collectors.toList());
-
             List<Skill> dbSkills = skillRepository.findByIdIn(skillIds);
             if (dbSkills.size() != skillIds.size()) {
                 throw new IdInvalidException("Một hoặc nhiều kỹ năng không tồn tại");
             }
             job.setSkills(dbSkills);
         }
-
-        // Lưu job
         Job savedJob = jobRepository.save(job);
-
-        // Tạo response
         ResCreateJobDTO dto = new ResCreateJobDTO();
         dto.setId(savedJob.getId());
         dto.setName(savedJob.getName());
@@ -165,37 +134,25 @@ public class JobService {
         dto.setActive(savedJob.isActive());
         dto.setCreatedAt(savedJob.getCreatedAt());
         dto.setCreatedBy(savedJob.getCreatedBy());
-
         if (savedJob.getSkills() != null) {
-            List<String> skills = savedJob.getSkills()
-                    .stream().map(Skill::getName)
-                    .collect(Collectors.toList());
+            List<String> skills = savedJob.getSkills().stream().map(Skill::getName).collect(Collectors.toList());
             dto.setSkills(skills);
         }
-
         return dto;
     }
 
     public ResUpdateJobDTO update(Job j, Job jobInDB) {
-        // check skills
         if (j.getSkills() != null) {
-            List<Long> reqSkills = j.getSkills()
-                    .stream().map(x -> x.getId())
-                    .collect(Collectors.toList());
-
+            List<Long> reqSkills = j.getSkills().stream().map(Skill::getId).collect(Collectors.toList());
             List<Skill> dbSkills = this.skillRepository.findByIdIn(reqSkills);
             jobInDB.setSkills(dbSkills);
         }
-
-        // check company
         if (j.getCompany() != null) {
             Optional<Company> cOptional = this.companyRepository.findById(j.getCompany().getId());
             if (cOptional.isPresent()) {
                 jobInDB.setCompany(cOptional.get());
             }
         }
-
-        // update correct info
         jobInDB.setName(j.getName());
         jobInDB.setSalary(j.getSalary());
         jobInDB.setQuantity(j.getQuantity());
@@ -205,11 +162,7 @@ public class JobService {
         jobInDB.setEndDate(j.getEndDate());
         jobInDB.setActive(j.isActive());
         jobInDB.setAddress(j.getAddress());
-
-        // update job
         Job currentJob = this.jobRepository.save(jobInDB);
-
-        // convert response
         ResUpdateJobDTO dto = new ResUpdateJobDTO();
         dto.setId(currentJob.getId());
         dto.setName(currentJob.getName());
@@ -223,47 +176,32 @@ public class JobService {
         dto.setUpdatedAt(currentJob.getUpdatedAt());
         dto.setUpdatedBy(currentJob.getUpdatedBy());
         dto.setAddress(currentJob.getAddress());
-
         if (currentJob.getSkills() != null) {
-            List<String> skills = currentJob.getSkills()
-                    .stream().map(item -> item.getName())
-                    .collect(Collectors.toList());
+            List<String> skills = currentJob.getSkills().stream().map(Skill::getName).collect(Collectors.toList());
             dto.setSkills(skills);
         }
-
         return dto;
     }
 
     public ResUpdateJobDTO updateForUserCompany(ReqUpdateJobDTO jobDTO) throws IdInvalidException {
-        // Lấy thông tin người dùng hiện tại
         String email = SecurityUtil.getCurrentUserLogin()
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
-
         User user = userRepository.findByEmail(email);
         if (user == null) {
             throw new IdInvalidException("Người dùng không tồn tại");
         }
-
-        // Kiểm tra công ty của người dùng
         Company userCompany = user.getCompany();
         if (userCompany == null) {
             throw new IdInvalidException("Người dùng không thuộc công ty nào");
         }
-
-        // Kiểm tra job tồn tại
         Optional<Job> jobOptional = jobRepository.findById(jobDTO.getId());
         if (!jobOptional.isPresent()) {
             throw new IdInvalidException("Công việc với id = " + jobDTO.getId() + " không tồn tại");
         }
-
         Job jobInDB = jobOptional.get();
-
-        // Kiểm tra job thuộc công ty của người dùng
         if (jobInDB.getCompany() == null || jobInDB.getCompany().getId() != userCompany.getId()) {
             throw new IdInvalidException("Bạn không có quyền cập nhật công việc này");
         }
-
-        // Cập nhật thông tin job
         jobInDB.setName(jobDTO.getName());
         jobInDB.setLocation(jobDTO.getLocation());
         jobInDB.setAddress(jobDTO.getAddress());
@@ -274,26 +212,19 @@ public class JobService {
         jobInDB.setStartDate(jobDTO.getStartDate());
         jobInDB.setEndDate(jobDTO.getEndDate());
         jobInDB.setActive(jobDTO.isActive());
-
-        // Xử lý skills
         if (jobDTO.getSkills() != null && !jobDTO.getSkills().isEmpty()) {
-            // Lấy ra danh sách ID từ List<SkillDTO>
             List<Long> skillIds = jobDTO.getSkills().stream()
                     .map(ReqUpdateJobDTO.SkillDTO::getId)
                     .collect(Collectors.toList());
-
             List<Skill> dbSkills = skillRepository.findByIdIn(skillIds);
             if (dbSkills.size() != skillIds.size()) {
                 throw new IdInvalidException("Một hoặc nhiều kỹ năng không tồn tại");
             }
             jobInDB.setSkills(dbSkills);
         } else {
-            jobInDB.setSkills(null); // Xóa hết skills nếu danh sách rỗng
+            jobInDB.setSkills(null);
         }
-        // Lưu job
         Job updatedJob = jobRepository.save(jobInDB);
-
-        // Tạo response
         ResUpdateJobDTO dto = new ResUpdateJobDTO();
         dto.setId(updatedJob.getId());
         dto.setName(updatedJob.getName());
@@ -306,14 +237,10 @@ public class JobService {
         dto.setActive(updatedJob.isActive());
         dto.setUpdatedAt(updatedJob.getUpdatedAt());
         dto.setUpdatedBy(updatedJob.getUpdatedBy());
-
         if (updatedJob.getSkills() != null) {
-            List<String> skills = updatedJob.getSkills()
-                    .stream().map(Skill::getName)
-                    .collect(Collectors.toList());
+            List<String> skills = updatedJob.getSkills().stream().map(Skill::getName).collect(Collectors.toList());
             dto.setSkills(skills);
         }
-
         return dto;
     }
 
@@ -322,110 +249,57 @@ public class JobService {
     }
 
     public void deleteForUserCompany(long id) throws IdInvalidException {
-        // Lấy thông tin người dùng hiện tại
         String email = SecurityUtil.getCurrentUserLogin()
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy người dùng"));
-
         User user = userRepository.findByEmail(email);
         if (user == null) {
             throw new IdInvalidException("Người dùng không tồn tại");
         }
-
-        // Kiểm tra công ty của người dùng
         Company userCompany = user.getCompany();
         if (userCompany == null) {
             throw new IdInvalidException("Người dùng không thuộc công ty nào");
         }
-
-        // Kiểm tra job tồn tại
         Optional<Job> jobOptional = jobRepository.findById(id);
         if (!jobOptional.isPresent()) {
             throw new IdInvalidException("Công việc với id = " + id + " không tồn tại");
         }
-
         Job job = jobOptional.get();
-
-        // Kiểm tra job thuộc công ty của người dùng
         if (job.getCompany() == null || job.getCompany().getId() != userCompany.getId()) {
             throw new IdInvalidException("Bạn không có quyền xóa công việc này");
         }
-
-        // Xóa job
         jobRepository.deleteById(id);
     }
 
-    // ========== CHANGE START: Modified fetchAll method ==========
     public Page<Job> fetchAll(Specification<Job> spec, Pageable pageable) {
-        // Lấy thông tin người dùng hiện tại
         Optional<String> currentUserLogin = SecurityUtil.getCurrentUserLogin();
         boolean isSuperAdmin = false;
-
         if (currentUserLogin.isPresent()) {
             User currentUser = this.userRepository.findByEmail(currentUserLogin.get());
-            if (currentUser != null && currentUser.getRole() != null &&
-                    "SUPER_ADMIN".equals(currentUser.getRole().getName())) {
+            if (currentUser != null && currentUser.getRole() != null
+                    && "SUPER_ADMIN".equals(currentUser.getRole().getName())) {
                 isSuperAdmin = true;
             }
         }
-
         Specification<Job> finalSpec = spec;
         if (!isSuperAdmin) {
-            Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder
-                    .equal(root.get("active"), true);
+            Specification<Job> activeJobsSpec = (root, query, cb) -> cb.equal(root.get("active"), true);
             finalSpec = spec.and(activeJobsSpec);
         }
-
-        // BƯỚC 1: Lấy một trang Job (chưa có company và skills)
-        // Câu lệnh này hiệu quả vì không fetch collection
-        Page<Job> pageJob = this.jobRepository.findAll(finalSpec, pageable);
-
-        ResultPaginationDTO rs = new ResultPaginationDTO();
-        ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
-
-        mt.setPage(pageable.getPageNumber() + 1);
-        mt.setPageSize(pageable.getPageSize());
-        mt.setPages(pageJob.getTotalPages());
-        mt.setTotal(pageJob.getTotalElements());
-        rs.setMeta(mt);
-
-        // BƯỚC 2: Từ danh sách Job của trang hiện tại, fetch đầy đủ details
-        // Lấy nội dung (content) của trang
-        List<Job> jobsOnPage = pageJob.getContent();
-
-        // Tạo một list mới chứa ID để truy vấn lại
-        List<Long> jobIds = jobsOnPage.stream().map(Job::getId).collect(Collectors.toList());
-
-        // Dùng EntityGraph để fetch đầy đủ thông tin cho các jobs trên trang này
-        // findAllById sẽ tự động áp dụng EntityGraph nếu có
-        // Ta cần đảm bảo JobRepository có phương thức findByIdIn với EntityGraph
-        List<Job> jobsWithDetails = this.jobRepository.findAllById(jobIds);
-
-        // BƯỚC 3: Map từ danh sách đã có đầy đủ details sang DTO
-        List<ResFetchJobDTO> listJobDTO = jobsWithDetails
-                .stream()
-                .map(this::convertToResFetchJobDTO)
-                .collect(Collectors.toList());
-
-        rs.setResult(listJobDTO);
-
-        return this.jobRepository.findAll(finalSpec, pageable);
+        // Sử dụng EntityGraph để fetch company và skills ngay trong truy vấn chính
+        return jobRepository.findAll(finalSpec, pageable);
     }
-    // ========== CHANGE END ==========
 
     @Transactional
     public ResBulkCreateJobDTO handleBulkCreateJobs(List<JobBulkCreateDTO> jobDTOs) {
         int total = jobDTOs.size();
         int success = 0;
         List<String> failedJobs = new ArrayList<>();
-
         for (JobBulkCreateDTO dto : jobDTOs) {
             try {
-                // Kiểm tra công việc trùng (dựa trên name và company)
                 if (this.isJobExist(dto.getName(), dto.getCompany().getId())) {
                     failedJobs.add(dto.getName() + " (Công việc đã tồn tại cho công ty này)");
                     continue;
                 }
-
                 Job job = new Job();
                 job.setName(dto.getName());
                 job.setLocation(dto.getLocation());
@@ -437,16 +311,12 @@ public class JobService {
                 job.setEndDate(Instant.parse(dto.getEndDate()));
                 job.setActive(dto.isActive());
                 job.setAddress(dto.getAddress());
-
-                // Kiểm tra và gán company
                 Optional<Company> companyOptional = this.companyRepository.findById(dto.getCompany().getId());
                 if (companyOptional.isEmpty()) {
                     failedJobs.add(dto.getName() + " (Company ID không tồn tại)");
                     continue;
                 }
                 job.setCompany(companyOptional.get());
-
-                // Kiểm tra và gán skills
                 List<Long> skillIds = dto.getSkills().stream().map(JobBulkCreateDTO.SkillDTO::getId)
                         .collect(Collectors.toList());
                 List<Skill> skills = this.skillRepository.findAllById(skillIds);
@@ -455,15 +325,12 @@ public class JobService {
                     continue;
                 }
                 job.setSkills(skills);
-
-                // Lưu job
                 this.jobRepository.save(job);
                 success++;
             } catch (Exception e) {
                 failedJobs.add(dto.getName() + " (Lỗi hệ thống: " + e.getMessage() + ")");
             }
         }
-
         return new ResBulkCreateJobDTO(total, success, total - success, failedJobs);
     }
 
@@ -475,59 +342,37 @@ public class JobService {
         return companyRepository.existsById(companyId);
     }
 
-    // ========== CHANGE START: Modified fetchJobsByCompany method ==========
     public ResultPaginationDTO fetchJobsByCompany(long companyId, Specification<Job> spec, Pageable pageable) {
-        // Lấy thông tin người dùng hiện tại
         Optional<String> currentUserLogin = SecurityUtil.getCurrentUserLogin();
         boolean canViewAll = false;
-
         if (currentUserLogin.isPresent()) {
             User currentUser = this.userRepository.findByEmail(currentUserLogin.get());
             if (currentUser != null) {
-                // Điều kiện 1: Người dùng là SUPER_ADMIN
                 if (currentUser.getRole() != null && "SUPER_ADMIN".equals(currentUser.getRole().getName())) {
                     canViewAll = true;
-                }
-                // Điều kiện 2: Người dùng thuộc công ty đang được truy vấn
-                else if (currentUser.getCompany() != null && currentUser.getCompany().getId() == companyId) {
+                } else if (currentUser.getCompany() != null && currentUser.getCompany().getId() == companyId) {
                     canViewAll = true;
                 }
             }
         }
-
-        // Specification để lọc theo companyId
-        Specification<Job> companySpec = (root, query, criteriaBuilder) -> criteriaBuilder
-                .equal(root.get("company").get("id"), companyId);
-
+        Specification<Job> companySpec = (root, query, cb) -> cb.equal(root.get("company").get("id"), companyId);
         Specification<Job> finalSpec = spec.and(companySpec);
-
-        // Nếu không có quyền xem tất cả (không phải admin hoặc không thuộc công ty đó),
-        // thì thêm điều kiện lọc active = true
         if (!canViewAll) {
-            Specification<Job> activeJobsSpec = (root, query, criteriaBuilder) -> criteriaBuilder
-                    .equal(root.get("active"), true);
+            Specification<Job> activeJobsSpec = (root, query, cb) -> cb.equal(root.get("active"), true);
             finalSpec = finalSpec.and(activeJobsSpec);
         }
-
         Page<Job> pageJob = jobRepository.findAll(finalSpec, pageable);
         ResultPaginationDTO rs = new ResultPaginationDTO();
         ResultPaginationDTO.Meta mt = new ResultPaginationDTO.Meta();
-
         mt.setPage(pageable.getPageNumber() + 1);
         mt.setPageSize(pageable.getPageSize());
         mt.setPages(pageJob.getTotalPages());
         mt.setTotal(pageJob.getTotalElements());
-
         rs.setMeta(mt);
         rs.setResult(pageJob.getContent());
-
         return rs;
     }
-    // ========== CHANGE END ==========
 
-    /**
-     * PHƯƠNG THỨC MỚI: Chuyển đổi Job Entity sang ResFetchJobDTO.
-     */
     public ResFetchJobDTO convertToResFetchJobDTO(Job job) {
         ResFetchJobDTO dto = new ResFetchJobDTO();
         dto.setId(job.getId());
@@ -544,7 +389,6 @@ public class JobService {
         dto.setUpdatedAt(job.getUpdatedAt());
         dto.setCreatedBy(job.getCreatedBy());
         dto.setUpdatedBy(job.getUpdatedBy());
-
         if (job.getCompany() != null) {
             ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
             companyInfo.setId(job.getCompany().getId());
@@ -552,7 +396,6 @@ public class JobService {
             companyInfo.setLogo(job.getCompany().getLogo());
             dto.setCompany(companyInfo);
         }
-
         if (job.getSkills() != null) {
             dto.setSkills(job.getSkills().stream().map(skill -> {
                 ResFetchJobDTO.SkillInfo skillInfo = new ResFetchJobDTO.SkillInfo();
@@ -561,31 +404,27 @@ public class JobService {
                 return skillInfo;
             }).collect(Collectors.toList()));
         }
-
         return dto;
     }
 
-    @Value("${hoidanit.endDateJob.check-cron:0 0 0 * * ?}") // Mặc định hangf ngayf
+    @Value("${hoidanit.endDateJob.check-cron:0 0 0 * * ?}")
     private String dateJobCheck;
 
-    @Scheduled(cron = "${hoidanit.endDateJob.check-cron}") // Cron expression: chạy mỗi giờ
+    @Scheduled(cron = "${hoidanit.endDateJob.check-cron}")
     @Transactional
     public void deactivateExpiredJobs() {
         Instant now = Instant.now();
         System.out.println(">>> Bắt đầu tác vụ lập lịch: Vô hiệu hóa các công việc hết hạn lúc " + now);
-
         List<Job> expiredJobs = this.jobRepository.findByActiveTrueAndEndDateBefore(now);
-
         if (expiredJobs != null && !expiredJobs.isEmpty()) {
             System.out.println(">>> Tìm thấy " + expiredJobs.size() + " công việc hết hạn cần cập nhật.");
             for (Job job : expiredJobs) {
                 job.setActive(false);
             }
-            this.jobRepository.saveAll(expiredJobs); // Lưu tất cả thay đổi trong một lần
+            this.jobRepository.saveAll(expiredJobs);
         } else {
             System.out.println(">>> Không có công việc nào hết hạn.");
         }
         System.out.println(">>> Kết thúc tác vụ lập lịch.");
     }
-
 }

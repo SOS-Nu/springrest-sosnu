@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.domain.response.job.ResJobDTO;
 import vn.hoidanit.jobhunter.service.ExchangeRateService;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -18,7 +19,6 @@ public abstract class JobMapper {
     @Autowired
     private ExchangeRateService exchangeRateService;
 
-    // KHAI BÁO TƯỜNG MINH TẤT CẢ CÁC SOURCE TỪ THAM SỐ 'job'
     @Mapping(source = "job.id", target = "id")
     @Mapping(source = "job.name", target = "name")
     @Mapping(source = "job.location", target = "location")
@@ -32,14 +32,10 @@ public abstract class JobMapper {
     @Mapping(source = "job.updatedAt", target = "updatedAt")
     @Mapping(source = "job.createdBy", target = "createdBy")
     @Mapping(source = "job.updatedBy", target = "updatedBy")
-
-    // Mapping cho các object lồng nhau
     @Mapping(source = "job.company.id", target = "company.id")
     @Mapping(source = "job.company.name", target = "company.name")
     @Mapping(source = "job.company.logo", target = "company.logo")
     @Mapping(source = "job.skills", target = "skills")
-
-    // Bỏ qua salary để xử lý thủ công
     @Mapping(target = "salary", ignore = true)
     public abstract ResJobDTO toDto(Job job, String language);
 
@@ -47,16 +43,24 @@ public abstract class JobMapper {
         if (jobs == null) {
             return null;
         }
-        return jobs.stream()
-                .map(job -> toDto(job, language))
-                .collect(Collectors.toList());
+
+        Double usdToVndRate = null;
+        if (language != null && language.startsWith("en")) {
+            usdToVndRate = exchangeRateService.getUsdToVndRate();
+        }
+
+        final Double finalRate = usdToVndRate;
+        return jobs.stream().map(job -> {
+            ResJobDTO dto = toDto(job, language);
+            convertSalary(job, dto, language, finalRate);
+            return dto;
+        }).collect(Collectors.toList());
     }
 
-    @AfterMapping
-    protected void convertSalary(Job job, @MappingTarget ResJobDTO dto, String language) {
+    protected void convertSalary(Job job, @MappingTarget ResJobDTO dto, String language, Double usdToVndRate) {
         ResJobDTO.SalaryInfo salaryInfo = new ResJobDTO.SalaryInfo();
-        if (language != null && language.startsWith("en")) {
-            salaryInfo.setValue(exchangeRateService.convert(job.getSalary(), "VND", "USD"));
+        if (language != null && language.startsWith("en") && usdToVndRate != null) {
+            salaryInfo.setValue(Math.round((job.getSalary() / usdToVndRate) * 100.0) / 100.0);
             salaryInfo.setCurrency("USD");
         } else {
             salaryInfo.setValue(job.getSalary());
