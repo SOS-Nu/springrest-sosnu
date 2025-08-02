@@ -19,8 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @EnableWebSocketMessageBroker
 public class WebSocketConfiguration implements WebSocketMessageBrokerConfigurer {
 
-    @Value("${APP_CORS_ALLOWED_ORIGINS}")
-    private String[] allowedOrigins;
+    // @Value("${APP_CORS_ALLOWED_ORIGINS}")
+    // private String[] allowedOrigins;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -29,19 +29,19 @@ public class WebSocketConfiguration implements WebSocketMessageBrokerConfigurer 
         registry.setUserDestinationPrefix("/user");
     }
 
-    // @Override
-    // public void registerStompEndpoints(StompEndpointRegistry registry) {
-    // registry.addEndpoint("/ws")
-    // .setAllowedOrigins("http://localhost:3000", "http://192.168.1.70:3000")
-    // .withSockJS();
-    // }
-
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(this.allowedOrigins)
+                .setAllowedOrigins("http://localhost:3000", "http://192.168.1.70:3000")
                 .withSockJS();
     }
+    //
+    // @Override
+    // public void registerStompEndpoints(StompEndpointRegistry registry) {
+    // registry.addEndpoint("/ws")
+    // .setAllowedOrigins(this.allowedOrigins)
+    // .withSockJS();
+    // }
 
     @Override
     public boolean configureMessageConverters(List<MessageConverter> messageConverters) {

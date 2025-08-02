@@ -148,11 +148,18 @@ public class CompanyService {
                 dto.setId(company.getId());
                 dto.setName(company.getName());
                 dto.setLogo(company.getLogo());
-                // ... các trường khác của company ...
+                dto.setField(company.getField());
+                dto.setWebsite(company.getWebsite());
+                dto.setScale(company.getScale());
+                dto.setLocation(company.getLocation());
+                dto.setFoundingYear(company.getFoundingYear());
+                dto.setCountry(company.getCountry());
                 dto.setAddress(company.getAddress());
                 dto.setDescription(company.getDescription());
                 dto.setCreatedAt(company.getCreatedAt());
                 dto.setUpdatedAt(company.getUpdatedAt());
+                dto.setCreatedBy(company.getCreatedBy());
+                dto.setUpdatedBy(company.getUpdatedBy());
 
                 // Map thông tin HR từ userMap
                 User hrUser = userMap.get(company.getId());

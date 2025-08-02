@@ -24,9 +24,9 @@ public class ResFetchCompanyDTO {
     private Instant createdAt;
     private Instant updatedAt;
 
-    // private String createdBy;
-    //
-    // private String updatedBy;
+    private String createdBy;
+
+    private String updatedBy;
 
     // New field to hold the count of active jobs
     private long totalJobs;
