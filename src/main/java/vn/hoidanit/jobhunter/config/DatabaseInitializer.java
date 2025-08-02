@@ -36,6 +36,47 @@ public class DatabaseInitializer implements CommandLineRunner {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    // <<< PHƯƠNG THỨC MỚI: TỰ ĐỘNG CẤU HÌNH BẢNG MÃ UTF-8
+    private void configureCharacterEncoding() {
+        System.out.println(">>> STARTING CONFIGURE CHARACTER ENCODING...");
+        try {
+            // Danh sách các cột cần chuyển đổi
+            String[] sqlCommands = {
+                    // Sửa bảng users
+                    "ALTER TABLE users MODIFY name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+                    "ALTER TABLE users MODIFY address VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+
+                    // Sửa bảng companies (nếu có các cột text)
+                    "ALTER TABLE companies MODIFY name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+                    "ALTER TABLE companies MODIFY description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+                    "ALTER TABLE companies MODIFY address VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+
+                    // Sửa bảng jobs (nếu có các cột text)
+                    "ALTER TABLE jobs MODIFY name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+                    "ALTER TABLE jobs MODIFY description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+                    "ALTER TABLE jobs MODIFY location VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+                    // Thêm các lệnh ALTER cho các bảng/cột khác tại đây nếu cần
+            };
+
+            for (String sql : sqlCommands) {
+                try {
+                    System.out.println("Executing: " + sql);
+                    jdbcTemplate.execute(sql);
+                } catch (Exception e) {
+                    // Bỏ qua lỗi nếu cột/bảng không tồn tại (do ddl-auto)
+                    System.err.println(
+                            "Skipping command due to error (might be expected on first run): " + e.getMessage());
+                }
+            }
+
+            System.out.println(">>> CONFIGURE CHARACTER ENCODING SUCCESS!");
+        } catch (Exception e) {
+            System.err.println(">>> FAILED TO CONFIGURE CHARACTER ENCODING: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     // TẠO MỘT HÀM MỚI ĐỂ CHẠY SQL
     private void initFullTextIndex() {
         System.out.println(">>> STARTING CREATE FULLTEXT INDEXES...");
@@ -65,7 +106,7 @@ public class DatabaseInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         System.out.println(">>> START INIT DATABASE");
-
+        configureCharacterEncoding();
         initFullTextIndex();
 
         long countPermissions = this.permissionRepository.count();

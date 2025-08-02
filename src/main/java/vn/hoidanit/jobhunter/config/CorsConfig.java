@@ -2,6 +2,7 @@ package vn.hoidanit.jobhunter.config;
 
 import java.util.Arrays;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -11,14 +12,16 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 public class CorsConfig {
 
+    // <<< BƯỚC 1: ĐỌC GIÁ TRỊ TỪ BIẾN MÔI TRƯỜNG
+    @Value("${APP_CORS_ALLOWED_ORIGINS}")
+    private String[] allowedOrigins;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // cho phép các URL nào có thể kết nối tới backend
-        configuration.setAllowedOrigins(
-                Arrays.asList("http://localhost:3000", "http://localhost:4173", "http://localhost:5173",
-                        "http://192.168.0.197:3000"));
+        configuration.setAllowedOrigins(Arrays.asList(this.allowedOrigins));
 
         // các method nào đc kết nối
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
