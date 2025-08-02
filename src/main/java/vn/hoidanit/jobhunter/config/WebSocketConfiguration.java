@@ -2,6 +2,7 @@ package vn.hoidanit.jobhunter.config;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.converter.DefaultContentTypeResolver;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
@@ -17,6 +18,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfiguration implements WebSocketMessageBrokerConfigurer {
+
+    @Value("${APP_CORS_ALLOWED_ORIGINS}")
+    private String[] allowedOrigins;
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/user");
@@ -24,10 +29,17 @@ public class WebSocketConfiguration implements WebSocketMessageBrokerConfigurer 
         registry.setUserDestinationPrefix("/user");
     }
 
+    // @Override
+    // public void registerStompEndpoints(StompEndpointRegistry registry) {
+    // registry.addEndpoint("/ws")
+    // .setAllowedOrigins("http://localhost:3000", "http://192.168.1.70:3000")
+    // .withSockJS();
+    // }
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("http://localhost:3000", "http://192.168.1.70:3000")
+                .setAllowedOrigins(this.allowedOrigins)
                 .withSockJS();
     }
 

@@ -12,6 +12,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer.FrameOptionsConfig;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -83,7 +84,7 @@ public class SecurityConfiguration {
                 "/api/v1/gemini/initiate-candidate-search/**",
         };
         http
-                .csrf(c -> c.disable())
+                .csrf(AbstractHttpConfigurer::disable) // <<< ĐẢM BẢO CHÍNH XÁC DÒNG NÀY
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(
                         authz -> authz
