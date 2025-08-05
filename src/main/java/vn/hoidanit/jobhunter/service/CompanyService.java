@@ -197,25 +197,29 @@ public class CompanyService {
         return this.companyRepository.findById(id);
     }
 
-    /**
-     * PHƯƠNG THỨC MỚI: Trả về DTO với totalJobs để Controller sử dụng.
-     * 
-     * @param id The company ID.
-     * @return An Optional containing the ResFetchCompanyDTO.
-     */
     public Optional<ResFetchCompanyDTO> fetchCompanyDTOById(long id) {
-        Optional<Company> companyOptional = this.companyRepository.findById(id);
+        Optional<Company> companyOptional = this.companyRepository.findByIdWithHrUser(id);
         if (companyOptional.isEmpty()) {
             return Optional.empty();
         }
 
         Company company = companyOptional.get();
-        // Gọi convertToResFetchCompanyDTO đã được cập nhật
-        ResFetchCompanyDTO dto = this.convertToResFetchCompanyDTO(company);
 
-        // Fetch the active job count for this single company
+        ResFetchCompanyDTO dto = convertToResFetchCompanyDTO(company);
+
+        // Set totalJobs
         long activeJobs = this.jobRepository.countByCompany_IdAndActiveTrue(id);
         dto.setTotalJobs(activeJobs);
+
+        // Map thông tin HR trực tiếp tại đây
+        User hrUser = company.getUsers().isEmpty() ? null : company.getUsers().get(0);
+        if (hrUser != null) {
+            ResFetchCompanyDTO.HrCompany hrCompany = new ResFetchCompanyDTO.HrCompany(
+                    hrUser.getId(),
+                    hrUser.getName(),
+                    hrUser.getEmail());
+            dto.setHrCompany(hrCompany);
+        }
 
         return Optional.of(dto);
     }

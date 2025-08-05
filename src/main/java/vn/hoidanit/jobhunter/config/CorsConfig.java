@@ -24,7 +24,7 @@ public class CorsConfig {
         configuration.setAllowedOrigins(
                 Arrays.asList("http://localhost:3000", "http://localhost:4173",
                         "http://localhost:5173",
-                        "http://192.168.0.197:3000"));
+                        "http://172.28.32.102:3000"));
 
         // cho phép các URL nào có thể kết nối tới backend
         // doc tu file docer-compose.yml

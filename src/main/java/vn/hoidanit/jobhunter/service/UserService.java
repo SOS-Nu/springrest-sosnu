@@ -158,11 +158,7 @@ public class UserService {
     }
 
     public User fetchUserById(long id) {
-        Optional<User> userOptional = this.userRepository.findById(id);
-        if (userOptional.isPresent()) {
-            return userOptional.get();
-        }
-        return null;
+        return this.userRepository.findWithRoleCompanyAndOnlineResumeById(id).orElse(null);
     }
 
     public ResultPaginationDTO fetchAllUser(Specification<User> spec, Pageable pageable) {

@@ -72,7 +72,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
          * giải quyết triệt để vấn đề N+1.
          */
         @Override
-        @EntityGraph(value = "graph.user.details") // <<< PHẢI CÓ DÒNG NÀY
+        @EntityGraph(attributePaths = { "role", "company", "onlineResume" })
         Page<User> findAll(Specification<User> spec, Pageable pageable);
 
         // PHƯƠNG THỨC MỚI: Tìm user theo danh sách ID và fetch sẵn company, role
@@ -107,4 +107,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
                         ") " +
                         "SELECT * FROM RankedUsers WHERE rn = 1", nativeQuery = true)
         List<User> findFirstUserForCompanies(@Param("companyIds") List<Long> companyIds);
+
+        @EntityGraph(attributePaths = { "role", "company", "onlineResume" })
+        Optional<User> findWithRoleCompanyAndOnlineResumeById(long id);
+
 }
