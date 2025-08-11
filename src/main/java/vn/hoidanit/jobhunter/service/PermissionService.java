@@ -1,6 +1,10 @@
 package vn.hoidanit.jobhunter.service;
 
+import java.util.List;
 import java.util.Optional;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -12,7 +16,6 @@ import vn.hoidanit.jobhunter.repository.PermissionRepository;
 
 @Service
 public class PermissionService {
-
     private final PermissionRepository permissionRepository;
 
     public PermissionService(PermissionRepository permissionRepository) {
@@ -26,40 +29,41 @@ public class PermissionService {
                 p.getMethod());
     }
 
-    public Permission fetchById(long id) {
-        Optional<Permission> permissionOptional = this.permissionRepository.findById(id);
-        if (permissionOptional.isPresent())
-            return permissionOptional.get();
-        return null;
+    @Cacheable(value = "permissions", key = "#a0")
+    public Permission fetchById(Long id) {
+        if (id == null)
+            throw new IllegalArgumentException("Permission id must not be null");
+        return permissionRepository.findById(id).orElse(null);
     }
 
+    @Cacheable(value = "permissions", key = "'allPermissions'")
+    public List<Permission> fetchAllPermissions() {
+        return permissionRepository.findAll();
+    }
+
+    @CacheEvict(cacheNames = { "permissions", "user-permissions-v1" }, allEntries = true)
     public Permission create(Permission p) {
-        return this.permissionRepository.save(p);
+        return permissionRepository.save(p);
     }
 
+    @CacheEvict(cacheNames = { "permissions", "user-permissions-v1" }, allEntries = true)
     public Permission update(Permission p) {
-        Permission permissionDB = this.fetchById(p.getId());
-        if (permissionDB != null) {
-            permissionDB.setName(p.getName());
-            permissionDB.setApiPath(p.getApiPath());
-            permissionDB.setMethod(p.getMethod());
-            permissionDB.setModule(p.getModule());
+        if (p.getId() <= 0)
+            throw new IllegalArgumentException("Permission id must be > 0");
 
-            // update
-            permissionDB = this.permissionRepository.save(permissionDB);
-            return permissionDB;
-        }
-        return null;
+        Permission permissionDB = fetchById(p.getId());
+        permissionDB.setName(p.getName());
+        permissionDB.setApiPath(p.getApiPath());
+        permissionDB.setMethod(p.getMethod());
+        permissionDB.setModule(p.getModule());
+        return permissionRepository.save(permissionDB);
     }
 
+    @CacheEvict(cacheNames = { "permissions", "user-permissions-v1" }, allEntries = true)
     public void delete(long id) {
-        // delete permission_role
-        Optional<Permission> permissionOptional = this.permissionRepository.findById(id);
-        Permission currentPermission = permissionOptional.get();
-        currentPermission.getRoles().forEach(role -> role.getPermissions().remove(currentPermission));
-
-        // delete permission
-        this.permissionRepository.delete(currentPermission);
+        if (id <= 0)
+            throw new IllegalArgumentException("Permission id must be > 0");
+        permissionRepository.deleteById(id);
     }
 
     public ResultPaginationDTO getPermissions(Specification<Permission> spec, Pageable pageable) {
@@ -86,4 +90,5 @@ public class PermissionService {
         }
         return false;
     }
+
 }

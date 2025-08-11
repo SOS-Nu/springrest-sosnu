@@ -1,5 +1,8 @@
 package vn.hoidanit.jobhunter.controller;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -14,11 +17,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.turkraft.springfilter.boot.Filter;
 import jakarta.validation.Valid;
+import vn.hoidanit.jobhunter.domain.dto.PermissionDTO;
+import vn.hoidanit.jobhunter.domain.dto.RoleDTO;
+import vn.hoidanit.jobhunter.domain.entity.Permission;
 import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.service.RoleService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+import vn.hoidanit.jobhunter.util.mapper.RoleMapper;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -32,8 +39,7 @@ public class RoleController {
 
     @PostMapping("/roles")
     @ApiMessage("Create a role")
-    public ResponseEntity<Role> create(@Valid @RequestBody Role r) throws IdInvalidException {
-        // check name
+    public ResponseEntity<RoleDTO> create(@Valid @RequestBody Role r) throws IdInvalidException {
         if (this.roleService.existByName(r.getName())) {
             throw new IdInvalidException("Role với name = " + r.getName() + " đã tồn tại");
         }
@@ -42,50 +48,38 @@ public class RoleController {
 
     @PutMapping("/roles")
     @ApiMessage("Update a role")
-    public ResponseEntity<Role> update(@Valid @RequestBody Role r) throws IdInvalidException {
-        // check id
-        if (this.roleService.fetchById(r.getId()) == null) {
+    public ResponseEntity<RoleDTO> update(@Valid @RequestBody Role r) throws IdInvalidException {
+        RoleDTO exist = this.roleService.fetchById(r.getId());
+        if (exist == null) {
             throw new IdInvalidException("Role với id = " + r.getId() + " không tồn tại");
         }
-
-        // check name
-        // if (this.roleService.existByName(r.getName())) {
-        // throw new IdInvalidException("Role với name = " + r.getName() + " đã tồn
-        // tại");
-        // }
-
-        return ResponseEntity.ok().body(this.roleService.update(r));
+        return ResponseEntity.ok(this.roleService.update(r));
     }
 
     @DeleteMapping("/roles/{id}")
     @ApiMessage("Delete a role")
     public ResponseEntity<Void> delete(@PathVariable("id") long id) throws IdInvalidException {
-        // check id
-        if (this.roleService.fetchById(id) == null) {
+        RoleDTO exist = this.roleService.fetchById(id);
+        if (exist == null) {
             throw new IdInvalidException("Role với id = " + id + " không tồn tại");
         }
         this.roleService.delete(id);
-        return ResponseEntity.ok().body(null);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/roles")
     @ApiMessage("Fetch roles")
-    public ResponseEntity<ResultPaginationDTO> getPermissions(
-            @Filter Specification<Role> spec, Pageable pageable) {
-
+    public ResponseEntity<ResultPaginationDTO> getRoles(@Filter Specification<Role> spec, Pageable pageable) {
         return ResponseEntity.ok(this.roleService.getRoles(spec, pageable));
     }
 
     @GetMapping("/roles/{id}")
     @ApiMessage("Fetch role by id")
-    public ResponseEntity<Role> getById(@PathVariable("id") long id) throws IdInvalidException {
-
-        Role role = this.roleService.fetchById(id);
+    public ResponseEntity<RoleDTO> getById(@PathVariable("id") Long id) throws IdInvalidException {
+        RoleDTO role = roleService.fetchById(id);
         if (role == null) {
-            throw new IdInvalidException("Resume với id = " + id + " không tồn tại");
+            throw new IdInvalidException("Role với id = " + id + " không tồn tại");
         }
-
-        return ResponseEntity.ok().body(role);
+        return ResponseEntity.ok(role);
     }
-
 }

@@ -16,6 +16,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -124,16 +125,19 @@ public class UserService {
     }
 
     public User handleCreateUser(User user) {
-        // check company
+        // company
         if (user.getCompany() != null) {
             Optional<Company> companyOptional = this.companyService.findById(user.getCompany().getId());
-            user.setCompany(companyOptional.isPresent() ? companyOptional.get() : null);
+            user.setCompany(companyOptional.orElse(null));
         }
 
-        // check role
-        if (user.getRole() != null) {
-            Role r = this.roleService.fetchById(user.getRole().getId());
-            user.setRole(r != null ? r : null);
+        // role: DÙNG REPO LẤY ENTITY, KHÔNG GỌI roleService (vì trả DTO)
+        if (user.getRole() != null && user.getRole().getId() > 0) {
+            // nếu chỉ gán quan hệ, dùng reference để tránh query thừa
+            Role roleRef = this.roleRepository.getReferenceById(user.getRole().getId());
+            user.setRole(roleRef);
+        } else {
+            user.setRole(null);
         }
 
         return this.userRepository.save(user);
@@ -184,6 +188,7 @@ public class UserService {
         return rs;
     }
 
+    @Transactional
     public User handleUpdateUser(User reqUser) {
         User currentUser = this.fetchUserById(reqUser.getId());
         if (currentUser != null) {
@@ -193,22 +198,22 @@ public class UserService {
             currentUser.setName(reqUser.getName());
             currentUser.setVip(reqUser.isVip());
 
-            if (reqUser.getCompany() != null) {
+            // company
+            if (reqUser.getCompany() != null && reqUser.getCompany().getId() > 0) {
                 Optional<Company> companyOptional = this.companyService.findById(reqUser.getCompany().getId());
-                currentUser.setCompany(companyOptional.isPresent() ? companyOptional.get() : null);
+                currentUser.setCompany(companyOptional.orElse(null));
             } else {
-                currentUser.setCompany((reqUser.getCompany()));
+                currentUser.setCompany(null);
             }
 
-            // check role
-            if (reqUser.getRole() != null) {
-                Role r = this.roleService.fetchById(reqUser.getRole().getId());
-                currentUser.setRole(r != null ? r : null);
+            // role: DÙNG REPO LẤY ENTITY
+            if (reqUser.getRole() != null && reqUser.getRole().getId() > 0) {
+                Role roleRef = this.roleRepository.getReferenceById(reqUser.getRole().getId());
+                currentUser.setRole(roleRef);
             } else {
-                currentUser.setRole(reqUser.getRole());
+                currentUser.setRole(null);
             }
 
-            // update
             currentUser = this.userRepository.save(currentUser);
         }
         return currentUser;
@@ -267,6 +272,23 @@ public class UserService {
 
     public User handleGetUserByUsername(String username) {
         return this.userRepository.findByEmail(username);
+    }
+
+    @Cacheable(cacheNames = "user-permissions-v1", key = "#a0", unless = "#result == null")
+    @Transactional(readOnly = true)
+    public List<String> getPermissionKeysByEmail(String email) {
+        var userOpt = this.userRepository.findOneWithRoleAndPermissionsByEmail(email);
+        if (userOpt.isEmpty())
+            return List.of();
+
+        var role = userOpt.get().getRole();
+        if (role == null || role.getPermissions() == null)
+            return List.of();
+
+        return role.getPermissions().stream()
+                .map(p -> (p.getMethod() + ":" + p.getApiPath()).toUpperCase())
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     public boolean isEmailExist(String email) {

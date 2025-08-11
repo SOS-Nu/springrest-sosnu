@@ -54,8 +54,6 @@ public interface JobRepository extends JpaRepository<Job, Long>,
       "GROUP BY j.company.id")
   List<CompanyJobCountDTO> countActiveJobsByCompanyIds(@Param("companyIds") List<Long> companyIds);
 
-  // --- CÁC PHƯƠNG THỨC MỚI ĐỂ LỌC SƠ BỘ ---
-
   /**
    * Tìm kiếm các job CÓ ACTIVE bằng Full-Text Search của MySQL.
    * 
@@ -89,5 +87,14 @@ public interface JobRepository extends JpaRepository<Job, Long>,
   @EntityGraph(attributePaths = { "company", "skills" })
   @Query("SELECT j FROM Job j WHERE j.active = true ORDER BY j.updatedAt DESC")
   List<Job> findAllActiveJobs(Pageable pageable);
+
+  @Query("""
+      select distinct j
+      from Job j
+      left join fetch j.company
+      left join fetch j.skills
+      where j.id in :ids
+      """)
+  List<Job> findAllWithCompanyAndSkillsByIdIn(@Param("ids") List<Long> ids);
 
 }

@@ -111,4 +111,11 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
         @EntityGraph(attributePaths = { "role", "company", "onlineResume" })
         Optional<User> findWithRoleCompanyAndOnlineResumeById(long id);
 
+        // UserRepository.java
+        @Query("select u from User u " +
+                        "left join fetch u.role r " +
+                        "left join fetch r.permissions " +
+                        "where u.email = :email")
+        Optional<User> findOneWithRoleAndPermissionsByEmail(@Param("email") String email);
+
 }

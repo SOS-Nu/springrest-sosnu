@@ -58,7 +58,6 @@ public class EmailService {
         }
     }
 
-    @Async
     public void sendEmailFromTemplateSync(
             String to,
             String subject,

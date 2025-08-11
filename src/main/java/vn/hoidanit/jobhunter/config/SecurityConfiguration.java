@@ -80,8 +80,7 @@ public class SecurityConfiguration {
                 "/api/v1/notify-user/**",
                 "/api/v1/gemini/search-results/**",
                 "/api/v1/gemini/initiate-search/**",
-                "/api/v1/gemini/candidate-search-results/**",
-                "/api/v1/gemini/initiate-candidate-search/**",
+
         };
         http
                 .csrf(AbstractHttpConfigurer::disable) // <<< ĐẢM BẢO CHÍNH XÁC DÒNG NÀY

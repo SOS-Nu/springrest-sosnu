@@ -22,43 +22,30 @@ public class PermissionInterceptor implements HandlerInterceptor {
     @Autowired
     UserService userService;
 
+    // PermissionInterceptor.java
+    // PermissionInterceptor.java
     @Override
-    @Transactional
-    public boolean preHandle(
-            HttpServletRequest request,
-            HttpServletResponse response, Object handler)
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
+        String pathPattern = (String) request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        String method = request.getMethod();
 
-        String path = (String) request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        String requestURI = request.getRequestURI();
-        String httpMethod = request.getMethod();
         System.out.println(">>> RUN preHandle");
-        System.out.println(">>> path= " + path);
-        System.out.println(">>> httpMethod= " + httpMethod);
-        System.out.println(">>> requestURI= " + requestURI);
+        System.out.println(">>> path= " + pathPattern);
+        System.out.println(">>> httpMethod= " + method);
+        System.out.println(">>> requestURI= " + request.getRequestURI());
 
-        // check permission
-        String email = SecurityUtil.getCurrentUserLogin().isPresent() == true
-                ? SecurityUtil.getCurrentUserLogin().get()
-                : "";
-        if (email != null && !email.isEmpty()) {
-            User user = this.userService.handleGetUserByUsername(email);
-            if (user != null) {
-                Role role = user.getRole();
-                if (role != null) {
-                    List<Permission> permissions = role.getPermissions();
-                    boolean isAllow = permissions.stream().anyMatch(item -> item.getApiPath().equals(path)
-                            && item.getMethod().equals(httpMethod));
-
-                    if (isAllow == false) {
-                        throw new PermissionException("Bạn không có quyền truy cập endpoint này.");
-                    }
-                } else {
-                    throw new PermissionException("Bạn không có quyền truy cập endpoint này.");
-                }
+        String email = SecurityUtil.getCurrentUserLogin().orElse("");
+        if (!email.isEmpty()) {
+            // lấy từ cache; lần đầu MISS -> DB 1 query (JOIN FETCH), các lần sau HIT
+            List<String> keys = userService.getPermissionKeysByEmail(email);
+            String currentKey = (method + ":" + pathPattern).toUpperCase();
+            if (!keys.contains(currentKey)) {
+                throw new PermissionException("Bạn không có quyền truy cập endpoint này.");
             }
         }
 
         return true;
     }
+
 }

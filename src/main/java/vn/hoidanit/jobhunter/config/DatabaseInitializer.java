@@ -169,6 +169,11 @@ public class DatabaseInitializer implements CommandLineRunner {
             arr.add(new Permission("Download a file", "/api/v1/files", "POST", "FILES"));
             arr.add(new Permission("Upload a file", "/api/v1/files", "GET", "FILES"));
 
+            arr.add(new Permission("get candidate users for recruiter", "/api/v1/gemini/initiate-candidate-search",
+                    "GET", "SearchUsersAI"));
+            arr.add(new Permission("get candidate users for recruiter pagination",
+                    "/api/v1/gemini/candidate-search-results", "GET", "SearchUsersAI"));
+
             this.permissionRepository.saveAll(arr);
         }
 

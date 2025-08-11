@@ -57,11 +57,10 @@ public class GeminiService {
     private final UserService userService;
     private final FileService fileService;
     private final ObjectMapper objectMapper;
-    private final JobRepository jobRepository; // THÊM REPOSITORY NÀY
-    private final JobService jobService; // THÊM SERVICE NÀY
+    private final JobRepository jobRepository;
+    private final JobService jobService;
     private final UserRepository userRepository;
-    private final CacheManager cacheManager; // <<< THÊM BIẾN NÀY
-
+    private final CacheManager cacheManager;
     @Value("${gemini.api.key}")
     private String geminiApiKey;
 

@@ -41,11 +41,45 @@ dependencies {
 	implementation("org.apache.tika:tika-core:2.9.1")
     implementation("org.apache.tika:tika-parsers-standard-package:2.9.1")
 
+	//cache vs spring vs redis
+	implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
+	//conver jackson
+	implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+
+    // Lombok (freefair lo liệu, nhưng cứ khai báo rõ ràng cho chắc)
+    compileOnly("org.projectlombok:lombok")
+    annotationProcessor("org.projectlombok:lombok")
+	//mapstruc
+	implementation("org.mapstruct:mapstruct:1.5.5.Final")
+    annotationProcessor("org.mapstruct:mapstruct-processor:1.5.5.Final")
+
+	//  BẮT BUỘC khi dùng Lombok + MapStruct để tránh xung đột thứ tự processor
+    annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
+
+	//kafka
+    implementation("org.springframework.kafka:spring-kafka")
+    testImplementation("org.springframework.kafka:spring-kafka-test")
+
 
 }
+
+
 tasks.withType<JavaCompile> {
     options.compilerArgs.add("-parameters")
 }
+
+
 tasks.withType<Test> {
 	useJUnitPlatform()
 }
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.addAll(listOf(
+        "-parameters",
+        "-Amapstruct.verbose=true",
+        "-Amapstruct.suppressGeneratorTimestamp=true"
+    ))
+}
+
