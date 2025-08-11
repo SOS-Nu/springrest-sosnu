@@ -24,8 +24,8 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 "/api/v1/payment/history/**",
                 // chatting
                 "/chat",
-                "/messages/**",
-                "/users-connected/**",
+                "/api/v1/messages/**",
+                "/api/v1/users-connected/**",
                 "/user.disconnectUser",
                 "/heartbeat.ping",
                 "/user.addUser",
