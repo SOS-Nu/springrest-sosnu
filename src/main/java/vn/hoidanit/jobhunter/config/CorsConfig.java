@@ -13,22 +13,22 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class CorsConfig {
 
     // <<< BƯỚC 1: ĐỌC GIÁ TRỊ TỪ BIẾN MÔI TRƯỜNG
-    // @Value("${APP_CORS_ALLOWED_ORIGINS}")
-    // private String[] allowedOrigins;
+    @Value("${APP_CORS_ALLOWED_ORIGINS}")
+    private String[] allowedOrigins;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // cho phép các URL nào có thể kết nối tới backend
-        configuration.setAllowedOrigins(
-                Arrays.asList("http://localhost:3000", "http://localhost:4173",
-                        "http://localhost:5173",
-                        "http://172.28.32.102:3000"));
+        // configuration.setAllowedOrigins(
+        // Arrays.asList("http://localhost:3000", "http://localhost:4173",
+        // "http://localhost:5173",
+        // "http://172.28.32.102:3000"));
 
         // cho phép các URL nào có thể kết nối tới backend
         // doc tu file docer-compose.yml
-        // configuration.setAllowedOrigins(Arrays.asList(this.allowedOrigins));
+        configuration.setAllowedOrigins(Arrays.asList(this.allowedOrigins));
 
         // các method nào đc kết nối
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
