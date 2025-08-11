@@ -62,6 +62,10 @@ dependencies {
     implementation("org.springframework.kafka:spring-kafka")
     testImplementation("org.springframework.kafka:spring-kafka-test")
 
+	//monitoring performence
+	implementation("io.micrometer:micrometer-registry-prometheus")
+
+
 
 }
 

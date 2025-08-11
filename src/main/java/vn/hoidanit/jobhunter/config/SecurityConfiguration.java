@@ -83,7 +83,7 @@ public class SecurityConfiguration {
 
         };
         http
-                .csrf(AbstractHttpConfigurer::disable) // <<< ĐẢM BẢO CHÍNH XÁC DÒNG NÀY
+                .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(
                         authz -> authz
@@ -92,7 +92,7 @@ public class SecurityConfiguration {
                                 .requestMatchers(HttpMethod.PUT, "/api/v1/jobs/by-user-company").authenticated()
                                 .requestMatchers(HttpMethod.DELETE, "/api/v1/jobs/by-user-company/{id}").authenticated()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/companies/by-user").authenticated()
-
+                                .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/comments").authenticated()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/users/main-resume").authenticated()
                                 .requestMatchers("/api/v1/online-resumes/**").authenticated()
