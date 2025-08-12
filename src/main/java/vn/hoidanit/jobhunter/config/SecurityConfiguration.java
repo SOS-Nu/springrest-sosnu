@@ -34,7 +34,10 @@ import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.util.Base64;
 
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
+import vn.hoidanit.jobhunter.web.filter.RateLimitingFilter;
 
 @Configuration
 @EnableMethodSecurity(securedEnabled = true)
@@ -50,7 +53,8 @@ public class SecurityConfiguration {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
-            CustomAuthenticationEntryPoint customAuthenticationEntryPoint) throws Exception {
+            CustomAuthenticationEntryPoint customAuthenticationEntryPoint, RateLimitingFilter rateLimitingFilter)
+            throws Exception {
         String[] whiteList = {
                 "/",
                 "/api/v1/auth/login", "/api/v1/auth/google", "/api/v1/auth/refresh", "/storage/**",
@@ -109,9 +113,19 @@ public class SecurityConfiguration {
                 // // .accessDeniedHandler(new BearerTokenAccessDeniedHandler())) // 403
                 //
                 .formLogin(f -> f.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(rateLimitingFilter, BasicAuthenticationFilter.class);
+        ;
 
         return http.build();
+    }
+
+    @Bean
+    public RateLimitingFilter rateLimitingFilter(
+            ProxyManager<String> proxyManager,
+            BucketConfiguration defaultBucketConfig,
+            vn.hoidanit.jobhunter.config.RateLimitProperties props) {
+        return new RateLimitingFilter(proxyManager, defaultBucketConfig, props);
     }
 
     @Bean
