@@ -47,7 +47,16 @@ public class CommentService {
 
         // Kiểm tra công ty tồn tại
         Company company = companyRepository.findById(commentDTO.getCompanyId())
-                .orElseThrow(() -> new IdInvalidException("Công ty với id = " + commentDTO.getCompanyId() + " không tồn tại"));
+                .orElseThrow(
+                        () -> new IdInvalidException(
+                                "Công ty với id = " + commentDTO.getCompanyId() + " không tồn tại"));
+
+        // === BẮT ĐẦU THAY ĐỔI ===
+        // Kiểm tra xem người dùng đã bình luận cho công ty này chưa
+        if (commentRepository.existsByUserAndCompany(user, company)) {
+            throw new IdInvalidException("Bạn đã gửi đánh giá cho công ty này rồi.");
+        }
+        // === KẾT THÚC THAY ĐỔI ===
 
         // Tạo bình luận mới
         Comment comment = new Comment();
@@ -84,8 +93,8 @@ public class CommentService {
         }
 
         // Tạo specification để lọc theo companyId
-        Specification<Comment> companySpec = (root, query, criteriaBuilder) ->
-                criteriaBuilder.equal(root.get("company").get("id"), companyId);
+        Specification<Comment> companySpec = (root, query, criteriaBuilder) -> criteriaBuilder
+                .equal(root.get("company").get("id"), companyId);
 
         // Kết hợp spec từ người dùng với spec của company
         Specification<Comment> finalSpec = companySpec.and(spec);
