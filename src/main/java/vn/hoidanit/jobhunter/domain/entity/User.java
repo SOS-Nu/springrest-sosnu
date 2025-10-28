@@ -36,98 +36,105 @@ import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @NamedEntityGraph(name = "graph.user.role", attributeNodes = { @NamedAttributeNode("role") })
 @NamedEntityGraph(name = "graph.user.details", attributeNodes = {
-        @NamedAttributeNode("company"),
-        @NamedAttributeNode("role"),
-        @NamedAttributeNode("onlineResume"),
-        // CHỈ GIỮ LẠI MỘT LIST
-        @NamedAttributeNode(value = "resumes", subgraph = "subgraph.resume.details")
+                @NamedAttributeNode("company"),
+                @NamedAttributeNode("role"),
+                @NamedAttributeNode("onlineResume"),
+                // CHỈ GIỮ LẠI MỘT LIST
+                @NamedAttributeNode(value = "resumes", subgraph = "subgraph.resume.details")
 // LOẠI BỎ workExperiences VÀ paymentHistories KHỎI GRAPH NÀY
 }, subgraphs = {
-        @NamedSubgraph(name = "subgraph.resume.details", attributeNodes = {
-                @NamedAttributeNode(value = "job", subgraph = "subgraph.job.company") }),
-        @NamedSubgraph(name = "subgraph.job.company", attributeNodes = { @NamedAttributeNode("company") })
+                @NamedSubgraph(name = "subgraph.resume.details", attributeNodes = {
+                                @NamedAttributeNode(value = "job", subgraph = "subgraph.job.company") }),
+                @NamedSubgraph(name = "subgraph.job.company", attributeNodes = { @NamedAttributeNode("company") })
 })
 @Entity
 @Table(name = "users")
 @Getter
 @Setter
 public class User {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private long id;
 
-    private String name;
+        private String name;
 
-    @NotBlank(message = "email không được để trống")
-    private String email;
+        @NotBlank(message = "email không được để trống")
+        private String email;
 
-    private String password;
+        private String password;
 
-    private int age;
-    private String mainResume;
+        private int age;
+        private String mainResume;
 
-    @Enumerated(EnumType.STRING)
-    private GenderEnum gender;
+        @Enumerated(EnumType.STRING)
+        private GenderEnum gender;
 
-    private String address;
+        private String address;
 
-    @Column(columnDefinition = "MEDIUMTEXT")
-    private String refreshToken;
+        // @Column(columnDefinition = "MEDIUMTEXT")
+        // private String refreshToken;
 
-    private Instant createdAt;
-    private Instant updatedAt;
-    private String createdBy;
-    private String updatedBy;
-    private String avatar;
-    private boolean isVip;
-    private LocalDateTime vipExpiryDate;
-    private int cvSubmissionCount;
+        @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+        @JsonIgnore
+        private List<UserSession> sessions; // <<< THÊM QUAN HỆ NÀY
 
-    // TÍCH HỢP TRƯỜNG MỚI
-    @Column(columnDefinition = "boolean default true")
-    private boolean isPublic = true;
+        private Instant createdAt;
+        private Instant updatedAt;
+        private String createdBy;
+        private String updatedBy;
+        private String avatar;
+        private boolean isVip;
+        private LocalDateTime vipExpiryDate;
+        private int cvSubmissionCount;
 
-    @BatchSize(size = 25)
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private List<PaymentHistory> paymentHistories;
+        // TÍCH HỢP TRƯỜNG MỚI
+        @Column(columnDefinition = "boolean default true")
+        private boolean isPublic = true;
 
-    @ManyToOne
-    @JoinColumn(name = "company_id")
-    private Company company;
+        @BatchSize(size = 25)
+        @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+        @JsonIgnore
+        private List<PaymentHistory> paymentHistories;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    @JsonIgnore
-    List<Resume> resumes;
+        @ManyToOne
+        @JoinColumn(name = "company_id")
+        private Company company;
 
-    @ManyToOne
-    @JoinColumn(name = "role_id")
-    private Role role;
+        @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+        @JsonIgnore
+        List<Resume> resumes;
 
-    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JoinColumn(name = "online_resume_id", referencedColumnName = "id")
-    private OnlineResume onlineResume;
+        @ManyToOne
+        @JoinColumn(name = "role_id")
+        private Role role;
 
-    @BatchSize(size = 25) // THÊM DÒNG NÀY
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<WorkExperience> workExperiences;
+        @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+        @JoinColumn(name = "online_resume_id", referencedColumnName = "id")
+        private OnlineResume onlineResume;
 
-    @PrePersist
-    public void handleBeforeCreate() {
-        this.createdBy = SecurityUtil.getCurrentUserLogin().isPresent() == true
-                ? SecurityUtil.getCurrentUserLogin().get()
-                : "";
-        this.createdAt = Instant.now();
-    }
+        @BatchSize(size = 25)
+        @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+        private List<WorkExperience> workExperiences;
 
-    @Enumerated(EnumType.STRING)
-    private UserStatusEnum status;
+        @Column(name = "last_security_update_at")
+        private Instant lastSecurityUpdateAt;
 
-    @PreUpdate
-    public void handleBeforeUpdate() {
-        this.updatedBy = SecurityUtil.getCurrentUserLogin().isPresent() == true
-                ? SecurityUtil.getCurrentUserLogin().get()
-                : "";
-        this.updatedAt = Instant.now();
-    }
+        @PrePersist
+        public void handleBeforeCreate() {
+                this.createdBy = SecurityUtil.getCurrentUserLogin().isPresent() == true
+                                ? SecurityUtil.getCurrentUserLogin().get()
+                                : "";
+                this.createdAt = Instant.now();
+        }
+
+        @Enumerated(EnumType.STRING)
+        private UserStatusEnum status;
+
+        @PreUpdate
+        public void handleBeforeUpdate() {
+                this.updatedBy = SecurityUtil.getCurrentUserLogin().isPresent() == true
+                                ? SecurityUtil.getCurrentUserLogin().get()
+                                : "";
+                this.updatedAt = Instant.now();
+        }
 }

@@ -10,13 +10,18 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,8 +29,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.servlet.http.HttpServletRequest;
+import vn.hoidanit.jobhunter.config.CacheConfig;
 import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
 import vn.hoidanit.jobhunter.domain.entity.ChatRoom;
 import vn.hoidanit.jobhunter.domain.entity.Company;
@@ -33,6 +42,7 @@ import vn.hoidanit.jobhunter.domain.entity.OnlineResume;
 import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.entity.UserBulkCreateDTO;
+import vn.hoidanit.jobhunter.domain.entity.UserSession;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResUpdateUserDTO;
@@ -46,11 +56,13 @@ import vn.hoidanit.jobhunter.repository.ChatRoomRepository;
 import vn.hoidanit.jobhunter.repository.CommentRepository;
 import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
+import vn.hoidanit.jobhunter.repository.UserSessionRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 import vn.hoidanit.jobhunter.util.error.StorageException;
+import vn.hoidanit.jobhunter.web.filter.TokenBlacklistFilter;
 
 @Service
 public class UserService {
@@ -65,11 +77,16 @@ public class UserService {
     private final OnlineResumeService onlineResumeService;
     private final CommentRepository commentRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final RedisTokenBlacklistService blacklistService;
+    private final UserSessionRepository userSessionRepository;
+
+    private static final Logger log = LoggerFactory.getLogger(TokenBlacklistFilter.class); // Thêm logger
 
     public UserService(UserRepository userRepository, CompanyService companyService,
             RoleService roleService, PasswordEncoder passwordEncoder, RoleRepository roleRepository,
             ChatRoomRepository chatRoomRepository, FileService fileService, OnlineResumeService onlineResumeService,
-            ChatMessageRepository chatMessageRepository, CommentRepository commentRepository) {
+            ChatMessageRepository chatMessageRepository, CommentRepository commentRepository,
+            RedisTokenBlacklistService blacklistService, UserSessionRepository userSessionRepository) {
         this.userRepository = userRepository;
         this.companyService = companyService;
         this.roleService = roleService;
@@ -80,10 +97,15 @@ public class UserService {
         this.onlineResumeService = onlineResumeService;
         this.chatMessageRepository = chatMessageRepository;
         this.commentRepository = commentRepository;
+        this.blacklistService = blacklistService;
+        this.userSessionRepository = userSessionRepository;
     }
 
     @Value("${hoidanit.upload-file.base-uri}")
     private String baseURI;
+
+    @Value("${hoidanit.jwt.access-token-validity-in-seconds}")
+    private long accessTokenExpiration;
 
     @Transactional
     public ResUploadFileDTO uploadMainResume(MultipartFile file)
@@ -189,16 +211,26 @@ public class UserService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "user-security-timestamp", key = "#result?.email", condition = "#result != null"),
+            @CacheEvict(cacheNames = "user-permissions-v1", key = "#result?.email", condition = "#result != null")
+    })
     public User handleUpdateUser(User reqUser) {
         User currentUser = this.fetchUserById(reqUser.getId());
         if (currentUser != null) {
+
+            // Logic kiểm tra role thay đổi (vẫn giữ nguyên)
+            Long oldRoleId = (currentUser.getRole() != null) ? currentUser.getRole().getId() : null;
+            Long newRoleId = (reqUser.getRole() != null) ? reqUser.getRole().getId() : null;
+            boolean roleChanged = !Objects.equals(oldRoleId, newRoleId);
+
             currentUser.setAddress(reqUser.getAddress());
             currentUser.setGender(reqUser.getGender());
             currentUser.setAge(reqUser.getAge());
             currentUser.setName(reqUser.getName());
             currentUser.setVip(reqUser.isVip());
 
-            // company
+            // Cập nhật company (vẫn giữ nguyên)
             if (reqUser.getCompany() != null && reqUser.getCompany().getId() > 0) {
                 Optional<Company> companyOptional = this.companyService.findById(reqUser.getCompany().getId());
                 currentUser.setCompany(companyOptional.orElse(null));
@@ -206,7 +238,7 @@ public class UserService {
                 currentUser.setCompany(null);
             }
 
-            // role: DÙNG REPO LẤY ENTITY
+            // Cập nhật role (vẫn giữ nguyên)
             if (reqUser.getRole() != null && reqUser.getRole().getId() > 0) {
                 Role roleRef = this.roleRepository.getReferenceById(reqUser.getRole().getId());
                 currentUser.setRole(roleRef);
@@ -214,10 +246,40 @@ public class UserService {
                 currentUser.setRole(null);
             }
 
+            // Cập nhật timestamp (vẫn giữ nguyên)
+            // Logic này vẫn chính xác: chỉ cập nhật timestamp KHI role thay đổi
+            if (roleChanged) {
+                currentUser.setLastSecurityUpdateAt(Instant.now());
+            }
+
+            // Lưu và trả về currentUser
+            // Annotation @Caching sẽ dùng đối tượng `currentUser` này (bây giờ là #result)
+            // để lấy email làm key dọn dẹp cache.
             currentUser = this.userRepository.save(currentUser);
         }
         return currentUser;
     }
+
+    // ========== THÊM LẠI @Cacheable ==========
+    @Cacheable(cacheNames = "user-security-timestamp", key = "#a0", unless = "#result == null")
+    @Transactional(readOnly = true)
+    public Long getLastSecurityUpdateAt(String email) {
+        if (email == null) {
+            return null;
+        }
+        User user = this.userRepository.findByEmail(email);
+        Instant instant = (user != null) ? user.getLastSecurityUpdateAt() : null;
+
+        // *** Chuyển Instant thành mili giây (Long) ***
+        Long result = (instant != null) ? instant.toEpochMilli() : null;
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<User> findUserWithRoleAndPermissionsByEmail(String email) {
+        return this.userRepository.findOneWithRoleAndPermissionsByEmail(email);
+    }
+    // ---------- KẾT THÚC THÊM MỚI ---------
 
     // ---------- START: PHƯƠNG THỨC MỚI ĐƯỢC THÊM VÀO ----------
     /**
@@ -295,6 +357,27 @@ public class UserService {
         return this.userRepository.existsByEmail(email);
     }
 
+    @Transactional
+    @Caching(evict = {
+            // Evict cache timestamp ngay lập tức
+            @CacheEvict(cacheNames = "user-security-timestamp", key = "#email"),
+            @CacheEvict(cacheNames = "user-permissions-v1", key = "#email")
+    })
+    public void changePassword(String email, String newPassword) throws IdInvalidException {
+        User user = this.handleGetUserByUsername(email);
+        if (user == null) {
+            throw new IdInvalidException("User không tồn tại");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        // CẬP NHẬT TIMESTAMP ĐỂ VÔ HIỆU HÓA CÁC ACCESS TOKEN CŨ
+        user.setLastSecurityUpdateAt(Instant.now());
+
+        this.userRepository.save(user);
+
+        // Không cần gọi blacklistService ở đây,
+        // TokenBlacklistFilter sẽ tự động kiểm tra lastSecurityUpdateAt
+    }
+
     public ResCreateUserDTO convertToResCreateUserDTO(User user) {
         ResCreateUserDTO res = new ResCreateUserDTO();
         ResCreateUserDTO.CompanyUser com = new ResCreateUserDTO.CompanyUser();
@@ -365,24 +448,129 @@ public class UserService {
         res.setAvatar(user.getAvatar());
         res.setStatus(user.getStatus());
         res.setVip(user.isVip());
+        res.setLastSecurityUpdateAt(user.getLastSecurityUpdateAt());
 
         return res;
     }
 
-    public void updateUserToken(String token, String email) {
-        User currentUser = this.handleGetUserByUsername(email);
-        if (currentUser != null) {
-            currentUser.setRefreshToken(token);
-            this.userRepository.save(currentUser);
+    // public void updateUserToken(String token, String email) {
+    // User currentUser = this.handleGetUserByUsername(email);
+    // if (currentUser != null) {
+    // currentUser.setRefreshToken(token);
+    // this.userRepository.save(currentUser);
+    // }
+    // }
+
+    // public User getUserByRefreshTokenByEmail(String token, String email) {
+    // return this.userRepository.findByRefreshTokenAndEmail(token, email);
+    // }
+    //
+    // public User getUserByRefreshTokenAndEmail(String token, String email) {
+    // return this.userRepository.findByRefreshTokenAndEmail(token, email);
+    // }
+
+    @Transactional
+    public void deleteSessionsByIds(List<Long> sessionIds, long userId) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return; // Không làm gì nếu danh sách rỗng
+        }
+        this.userSessionRepository.deleteByIdsAndUserId(sessionIds, userId);
+    }
+
+    @Transactional
+    public UserSession createNewSession(User user, String refreshTokenJti, Instant expiresAt) {
+        UserSession session = new UserSession();
+        session.setUser(user);
+        session.setRefreshTokenJti(refreshTokenJti);
+        session.setExpiresAt(expiresAt);
+
+        try {
+            // Lấy IP và User-Agent
+            HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
+                    .getRequest();
+            session.setIpAddress(request.getRemoteAddr());
+            session.setUserAgent(request.getHeader("User-Agent"));
+        } catch (Exception e) {
+            log.warn("Không thể lấy thông tin request (IP/User-Agent) cho session.");
+            session.setIpAddress("unknown");
+            session.setUserAgent("unknown");
+        }
+
+        return this.userSessionRepository.save(session);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<UserSession> findSessionByJti(String jti) {
+        return this.userSessionRepository.findByRefreshTokenJti(jti);
+    }
+
+    @Transactional
+    public void deleteSessionByJti(String jti) {
+        this.userSessionRepository.deleteByRefreshTokenJti(jti);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserSession> getSessionsForUser(long userId) {
+        return this.userSessionRepository.findByUser_Id(userId);
+    }
+
+    @Transactional
+    public void deleteSessionById(long sessionId, long userId) throws IdInvalidException {
+        // Kiểm tra xem có tồn tại không
+        UserSession session = this.userSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IdInvalidException("Session không tồn tại"));
+
+        // Kiểm tra quyền sở hữu
+        if (session.getUser().getId() != userId) {
+            throw new IdInvalidException("Bạn không có quyền xóa session này");
+        }
+
+        // Xóa
+        this.userSessionRepository.delete(session);
+
+        // Hoặc bạn có thể gọi phương thức mới:
+        // this.userSessionRepository.deleteByIdsAndUserId(List.of(sessionId), userId);
+    }
+
+    @Transactional
+    public void deleteAllOtherSessions(long userId, String currentJti) {
+        List<UserSession> otherSessions = this.userSessionRepository.findByUser_IdAndRefreshTokenJtiNot(userId,
+                currentJti);
+        if (otherSessions != null && !otherSessions.isEmpty()) {
+            this.userSessionRepository.deleteAll(otherSessions);
         }
     }
 
-    public User getUserByRefreshTokenByEmail(String token, String email) {
-        return this.userRepository.findByRefreshTokenAndEmail(token, email);
+    // Thêm 1 phương thức save user đơn giản (sẽ dùng khi đổi pass)
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "user-security-timestamp", key = "#result?.email", condition = "#result != null"),
+            @CacheEvict(cacheNames = "user-permissions-v1", key = "#result?.email", condition = "#result != null")
+    })
+    public User saveUser(User user) {
+        // Dọn dẹp cache nếu user được save
+        return this.userRepository.save(user);
     }
 
-    public User getUserByRefreshTokenAndEmail(String token, String email) {
-        return this.userRepository.findByRefreshTokenAndEmail(token, email);
+    // Phương thức này sẽ sửa lỗi bug trong code cũ của bạn VÀ cập nhật timestamp
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "user-security-timestamp", key = "#result?.email", condition = "#result != null"),
+            @CacheEvict(cacheNames = "user-permissions-v1", key = "#result?.email", condition = "#result != null")
+    })
+    public User saveUserWithNewPassword(User user, String newPassword) {
+        user.setPassword(this.passwordEncoder.encode(newPassword));
+        user.setLastSecurityUpdateAt(Instant.now());
+        return this.userRepository.save(user);
+    }
+
+    // 3. THÊM CRON JOB dọn dẹp session hết hạn
+    @Scheduled(cron = "0 0 1 * * ?") // 1 giờ sáng mỗi ngày
+    @Transactional
+    public void cleanupExpiredSessions() {
+        log.info("Running scheduled job: Cleaning up expired user sessions...");
+        this.userSessionRepository.deleteByExpiresAtBefore(Instant.now());
+        log.info("Expired user sessions cleanup complete.");
     }
 
     @Transactional

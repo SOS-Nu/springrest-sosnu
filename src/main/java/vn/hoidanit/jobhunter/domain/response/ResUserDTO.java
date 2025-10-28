@@ -38,6 +38,7 @@ public class ResUserDTO {
 
     private RoleUser role;
     private ResLastMessageDTO lastMessage;
+    private Instant lastSecurityUpdateAt;
 
     @Getter
     @Setter
