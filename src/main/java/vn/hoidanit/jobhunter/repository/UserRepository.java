@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.domain.entity.UserSession;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @Repository

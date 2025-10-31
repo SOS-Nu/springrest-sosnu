@@ -61,6 +61,7 @@ import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+import vn.hoidanit.jobhunter.util.error.SessionLimitExceededException;
 import vn.hoidanit.jobhunter.util.error.StorageException;
 import vn.hoidanit.jobhunter.web.filter.TokenBlacklistFilter;
 
@@ -79,6 +80,9 @@ public class UserService {
     private final ChatMessageRepository chatMessageRepository;
     private final RedisTokenBlacklistService blacklistService;
     private final UserSessionRepository userSessionRepository;
+
+    // limit sessions user
+    private static final int MAX_SESSIONS_PER_USER = 10;
 
     private static final Logger log = LoggerFactory.getLogger(TokenBlacklistFilter.class); // Thêm logger
 
@@ -258,6 +262,66 @@ public class UserService {
             currentUser = this.userRepository.save(currentUser);
         }
         return currentUser;
+    }
+
+    // check sessions logout sessions limit old
+    @Transactional
+    public void enforceSessionLimitAndKickOldest(User user) {
+        Instant now = Instant.now();
+        long userId = user.getId();
+
+        // 1. Tự động dọn dẹp các session đã hết hạn
+        this.userSessionRepository.deleteByUser_IdAndExpiresAtBefore(userId, now);
+
+        // 2. Đếm số lượng session CÒN HOẠT ĐỘNG
+        long activeSessionCount = this.userSessionRepository.countByUser_IdAndExpiresAtAfter(userId, now);
+
+        // 3. Nếu đã đạt hoặc vượt giới hạn, thực hiện "đá"
+        if (activeSessionCount >= MAX_SESSIONS_PER_USER) {
+
+            log.warn("User {} (Verified Login) đã đạt giới hạn session. Đang xóa session cũ nhất...",
+                    user.getEmail());
+
+            // 4. Tìm và xóa session cũ nhất CÒN HOẠT ĐỘNG
+            Optional<UserSession> oldestSessionOpt = this.userSessionRepository
+                    .findFirstByUser_IdAndExpiresAtAfterOrderByCreatedAtAsc(userId, now);
+
+            if (oldestSessionOpt.isPresent()) {
+                UserSession oldestSession = oldestSessionOpt.get();
+                this.userSessionRepository.delete(oldestSession);
+                log.info("Đã xóa session cũ nhất (ID: {}) của user {}",
+                        oldestSession.getId(), user.getEmail());
+            }
+        }
+        // Nếu không (count < 5), thì không làm gì cả.
+    }
+
+    @Transactional
+    public void checkAndEnforceSessionLimit(User user) throws SessionLimitExceededException {
+
+        Instant now = Instant.now();
+        long userId = user.getId();
+
+        // BƯỚC 1: Tự động dọn dẹp các session đã hết hạn của user này.
+        // (Nếu một token refresh hết hạn, nó sẽ bị xóa ở đây
+        // khi user đăng nhập lần tiếp theo).
+        this.userSessionRepository.deleteByUser_IdAndExpiresAtBefore(userId, now);
+
+        // BƯỚC 2: Đếm số lượng session CÒN HOẠT ĐỘNG.
+        long activeSessionCount = this.userSessionRepository.countByUser_IdAndExpiresAtAfter(userId, now);
+
+        // BƯỚC 3: Kiểm tra giới hạn dựa trên số lượng CÒN HOẠT ĐỘNG.
+        if (activeSessionCount >= MAX_SESSIONS_PER_USER) {
+
+            log.warn("User {} đã đạt giới hạn {} session hoạt động.",
+                    user.getEmail(), MAX_SESSIONS_PER_USER);
+
+            throw new SessionLimitExceededException(
+                    "Bạn đã đạt giới hạn tối đa " + MAX_SESSIONS_PER_USER + " thiết bị đăng nhập."
+                            + " Vui lòng đăng xuất ở một thiết bị khác.");
+        }
+
+        // Nếu không có lỗi, user có thể đăng nhập.
     }
 
     // ========== THÊM LẠI @Cacheable ==========
@@ -636,7 +700,7 @@ public class UserService {
             userRepository.save(user);
         }
 
-        int maxSubmissions = user.isVip() ? 30 : 10;
+        int maxSubmissions = user.isVip() ? 3 : 1;
         return user.getCvSubmissionCount() < maxSubmissions;
     }
 
@@ -648,6 +712,7 @@ public class UserService {
         }
     }
 
+    // cronjob reset cv về 0 hàng tháng
     @Value("${hoidanit.vip.check-cron:0 0 0 1 * ?}") // Mặc định hàng tháng nếu không cấu hình
     private String vipCheckCron;
 

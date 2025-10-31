@@ -12,6 +12,7 @@ public class RedisTokenBlacklistService {
     // Tiền tố (prefix) để phân biệt các loại key trong Redis
     private static final String JTI_BLACKLIST_PREFIX = "jti_blacklist:";
     private static final String USER_BLACKLIST_PREFIX = "user_blacklist:";
+    private static final long REFRESH_TOKEN_BLACKLIST_TTL_SECONDS = 910; // 15 phút + 10 giây
 
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -26,6 +27,8 @@ public class RedisTokenBlacklistService {
      * @param jti       Mã JTI của token
      * @param expiresAt Thời điểm token hết hạn
      */
+    // * Dùng cho Access Token (khi logout), refresh token (hàm này để chặn
+    // accesstoken)
     public void blacklistToken(String jti, Instant expiresAt) {
         if (jti == null || expiresAt == null) {
             return;
@@ -86,5 +89,15 @@ public class RedisTokenBlacklistService {
             return 0;
         }
         return Duration.between(now, expiresAt).getSeconds();
+    }
+
+    public void blacklistRefreshToken(String jti) {
+        if (jti == null) {
+            return;
+        }
+        stringRedisTemplate.opsForValue().set(
+                JTI_BLACKLIST_PREFIX + jti,
+                "blacklisted_rt",
+                Duration.ofSeconds(REFRESH_TOKEN_BLACKLIST_TTL_SECONDS));
     }
 }

@@ -48,4 +48,18 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     @Transactional
     @Query("DELETE FROM UserSession s WHERE s.id IN :sessionIds AND s.user.id = :userId")
     void deleteByIdsAndUserId(@Param("sessionIds") List<Long> sessionIds, @Param("userId") long userId);
+
+    /**
+     * Xóa tất cả session của một user cụ thể MÀ đã hết hạn.
+     */
+    @Transactional
+    @Modifying
+    void deleteByUser_IdAndExpiresAtBefore(long userId, Instant now);
+
+    /**
+     * Đếm số lượng session của user cụ thể MÀ VẪN CÒN HẠN.
+     */
+    long countByUser_IdAndExpiresAtAfter(long userId, Instant now);
+
+    Optional<UserSession> findFirstByUser_IdAndExpiresAtAfterOrderByCreatedAtAsc(long userId, Instant now);
 }

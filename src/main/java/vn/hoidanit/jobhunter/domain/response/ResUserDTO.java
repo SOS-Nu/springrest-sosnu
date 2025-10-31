@@ -8,8 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import vn.hoidanit.jobhunter.domain.entity.Company;
-import vn.hoidanit.jobhunter.domain.response.ResLoginDTO.UserLogin.CompanyUser;
+
 import vn.hoidanit.jobhunter.domain.response.chat.ResLastMessageDTO;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;

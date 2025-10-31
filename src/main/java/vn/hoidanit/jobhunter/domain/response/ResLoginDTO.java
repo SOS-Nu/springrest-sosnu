@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.util.constant.GenderEnum;
+import vn.hoidanit.jobhunter.util.constant.ResumeStateEnum;
 
 @Getter
 @Setter
@@ -35,6 +36,7 @@ public class ResLoginDTO {
         private Role role;
         private boolean isVip;
         private LocalDateTime vipExpiryDate;
+        private String mainResume;
 
         private CompanyUser company;
 
