@@ -89,4 +89,15 @@ public class GlobalException {
         res.setMessage(ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(res);
     }
+
+    @ExceptionHandler(SessionLimitExceededException.class)
+    public ResponseEntity<RestResponse<Object>> handleSessionLimitExceededException(SessionLimitExceededException ex) {
+        RestResponse<Object> res = new RestResponse<Object>();
+
+        res.setStatusCode(HttpStatus.TOO_MANY_REQUESTS.value());
+        res.setMessage(ex.getMessage()); // Lấy message bạn đã định nghĩa
+        res.setError("Session Limit Exceeded");
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(res);
+    }
 }

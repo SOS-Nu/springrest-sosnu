@@ -1,6 +1,9 @@
 package vn.hoidanit.jobhunter.controller;
 
+import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -14,8 +17,11 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,21 +32,33 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.domain.entity.UserSession;
 import vn.hoidanit.jobhunter.domain.request.ReqChangePasswordDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqGoogleLoginDTO;
+import vn.hoidanit.jobhunter.domain.request.ReqDeleteSessionsDTO;
+
 import vn.hoidanit.jobhunter.domain.request.ReqLoginDTO;
+import vn.hoidanit.jobhunter.domain.request.ReqLoginOtpDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqSendOtpDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqUserRegisterDTO;
 import vn.hoidanit.jobhunter.domain.request.ReqVerifyOtpChangePasswordDTO;
+import vn.hoidanit.jobhunter.domain.response.ResChangePasswordDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateUserDTO;
 import vn.hoidanit.jobhunter.domain.response.ResLoginDTO;
+import vn.hoidanit.jobhunter.domain.response.ResSessionDTO;
+import vn.hoidanit.jobhunter.repository.UserSessionRepository;
 import vn.hoidanit.jobhunter.service.OtpService;
+import vn.hoidanit.jobhunter.service.RedisTokenBlacklistService;
 import vn.hoidanit.jobhunter.service.UserService;
+import vn.hoidanit.jobhunter.service.UserSessionService;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -51,6 +69,10 @@ public class AuthController {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
+    private final RedisTokenBlacklistService blacklistService; // Thêm service
+    private final JwtDecoder jwtDecoder; // Thêm decoder để đọc token khi logout
+    private final UserSessionService userSessionService;
+    private final UserSessionRepository userSessionRepository;
 
     @Value("${hoidanit.jwt.refresh-token-validity-in-seconds}")
     private long refreshTokenExpiration;
@@ -60,16 +82,23 @@ public class AuthController {
 
     public AuthController(AuthenticationManagerBuilder authenticationManagerBuilder,
             SecurityUtil securityUtil, UserService userService, PasswordEncoder passwordEncoder,
-            OtpService otpService) {
+            OtpService otpService, RedisTokenBlacklistService blacklistService, JwtDecoder jwtDecoder,
+            UserSessionService userSessionService, UserSessionRepository userSessionRepository) { // Thêm
         this.authenticationManagerBuilder = authenticationManagerBuilder;
         this.securityUtil = securityUtil;
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
         this.otpService = otpService;
+        this.blacklistService = blacklistService; // Thêm
+        this.jwtDecoder = jwtDecoder; // Thêm
+        this.userSessionService = userSessionService;
+        this.userSessionRepository = userSessionRepository;
     }
 
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+
     @PostMapping("/auth/login")
-    public ResponseEntity<ResLoginDTO> login(@Valid @RequestBody ReqLoginDTO loginDto) {
+    public ResponseEntity<ResLoginDTO> login(@Valid @RequestBody ReqLoginDTO loginDto, HttpServletRequest request) {
         // Nạp input gồm username/password vào Security
         UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                 loginDto.getUsername(), loginDto.getPassword());
@@ -84,37 +113,11 @@ public class AuthController {
         ResLoginDTO res = new ResLoginDTO();
         User currentUserDB = this.userService.handleGetUserByUsername(loginDto.getUsername());
         if (currentUserDB != null) {
-            ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin(
-                    currentUserDB.getId(),
-                    currentUserDB.getEmail(),
-                    currentUserDB.getName(),
-                    currentUserDB.getGender(),
-                    currentUserDB.getAddress(),
-                    currentUserDB.getAge(),
-                    currentUserDB.getAvatar(),
-                    currentUserDB.isPublic(),
-                    currentUserDB.getRole(),
-                    currentUserDB.isVip(),
-                    currentUserDB.getVipExpiryDate(),
 
-                    currentUserDB.getCompany() != null
-                            ? new ResLoginDTO.UserLogin.CompanyUser(
-                                    currentUserDB.getCompany().getId(),
-                                    currentUserDB.getCompany().getName(),
-                                    currentUserDB.getCompany().getDescription(),
-                                    currentUserDB.getCompany().getAddress(),
-                                    currentUserDB.getCompany().getLogo(),
-                                    currentUserDB.getCompany().getField(),
-                                    currentUserDB.getCompany().getWebsite(),
-                                    currentUserDB.getCompany().getScale(),
-                                    currentUserDB.getCompany().getCountry(),
-                                    currentUserDB.getCompany().getFoundingYear(),
-                                    currentUserDB.getCompany().getLocation())
-
-                            : null);
-            res.setUser(userLogin);
+            res.setUser(this.convertUserToUserLogin(currentUserDB));
         }
 
+        this.userService.checkAndEnforceSessionLimit(currentUserDB);
         // create access token
         String access_token = this.securityUtil.createAccessToken(authentication.getName(), res);
         res.setAccessToken(access_token);
@@ -122,8 +125,16 @@ public class AuthController {
         // create refresh token
         String refresh_token = this.securityUtil.createRefreshToken(loginDto.getUsername(), res);
 
-        // update user
-        this.userService.updateUserToken(refresh_token, loginDto.getUsername());
+        // SỬA LOGIC LƯU TOKEN:
+        // 1. Lấy JTI và Expiry từ refresh token
+        Jwt decodedRefresh = this.securityUtil.checkValidRefreshToken(refresh_token);
+        String jti = decodedRefresh.getClaimAsString("jti");
+        Instant expiresAt = decodedRefresh.getExpiresAt();
+
+        // 2. Không lưu vào User, mà tạo session mới
+        // this.userService.updateUserToken(refresh_token, loginDto.getUsername()); //
+        // <<< XÓA DÒNG NÀY
+        this.userService.createNewSession(currentUserDB, jti, expiresAt);
 
         // set cookies
         ResponseCookie resCookies = ResponseCookie
@@ -140,7 +151,7 @@ public class AuthController {
     }
 
     @PostMapping("/auth/google")
-    @ApiMessage("Đăng nhập bằng Google")
+    @ApiMessage("Đăng nhập bằng Google (đá session cũ nhất nếu đầy)")
     public ResponseEntity<ResLoginDTO> googleLogin(@Valid @RequestBody ReqGoogleLoginDTO googleLoginDTO)
             throws IdInvalidException {
         try {
@@ -168,43 +179,34 @@ public class AuthController {
                 user.setName(name);
                 user.setPassword(null); // Không đặt mật khẩu
                 user = userService.handleCreateUser(user);
+                // Nếu user mới, logic "đá" bên dưới sẽ không làm gì cả (vì 0 < 5)
             }
+
+            // === BẮT ĐẦU SỬA LOGIC ===
+
+            // 1. Thực thi logic "đá session cũ nhất" nếu đã đầy
+            // (Giống hệt /auth/login-otp/verify)
+            this.userService.enforceSessionLimitAndKickOldest(user);
+
+            // 2. CẬP NHẬT TIMESTAMP BẢO MẬT
+            // (Việc này sẽ vô hiệu hóa access token của session vừa bị đá
+            // và buộc các session hợp lệ khác phải refresh token)
+            user.setLastSecurityUpdateAt(Instant.now());
+            User updatedUser = this.userService.saveUser(user); // 'saveUser' sẽ dọn dẹp cache
+
+            // === KẾT THÚC SỬA LOGIC ===
 
             // Tạo authentication cho SecurityContext
             UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                     email, null, Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
 
-            // Tạo response
+            // Tạo response (PHẢI DÙNG 'updatedUser')
             ResLoginDTO res = new ResLoginDTO();
-            ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin(
-                    user.getId(),
-                    user.getEmail(),
-                    user.getName(),
-                    user.getGender(),
-                    user.getAddress(),
-                    user.getAge(),
-                    user.getAvatar(),
-                    user.isPublic(),
-                    user.getRole(),
-                    user.isVip(),
-                    user.getVipExpiryDate(),
 
-                    user.getCompany() != null
-                            ? new ResLoginDTO.UserLogin.CompanyUser(
-                                    user.getCompany().getId(),
-                                    user.getCompany().getName(),
-                                    user.getCompany().getDescription(),
-                                    user.getCompany().getAddress(),
-                                    user.getCompany().getLogo(),
-                                    user.getCompany().getField(),
-                                    user.getCompany().getWebsite(),
-                                    user.getCompany().getScale(),
-                                    user.getCompany().getCountry(),
-                                    user.getCompany().getFoundingYear(),
-                                    user.getCompany().getLocation())
-                            : null);
-            res.setUser(userLogin);
+            res.setUser(this.convertUserToUserLogin(updatedUser));
+
+            // XÓA LỜI GỌI CŨ NÀY (lời gọi checkAndEnforceSessionLimit)
 
             // Tạo access token
             String accessToken = securityUtil.createAccessToken(email, res);
@@ -212,7 +214,12 @@ public class AuthController {
 
             // Tạo refresh token
             String refreshToken = securityUtil.createRefreshToken(email, res);
-            userService.updateUserToken(refreshToken, email);
+            Jwt decodedRefresh = this.securityUtil.checkValidRefreshToken(refreshToken);
+            String jti = decodedRefresh.getClaimAsString("jti");
+            Instant expiresAt = decodedRefresh.getExpiresAt();
+
+            // Tạo session mới (PHẢI DÙNG 'updatedUser')
+            this.userService.createNewSession(updatedUser, jti, expiresAt);
 
             // Set cookie cho refresh token
             ResponseCookie resCookies = ResponseCookie
@@ -227,7 +234,10 @@ public class AuthController {
                     .header(HttpHeaders.SET_COOKIE, resCookies.toString())
                     .body(res);
         } catch (Exception e) {
-            throw new IdInvalidException("Lỗi xác minh Google token: " + e.getMessage());
+            // Nếu dùng @RestControllerAdvice, nó sẽ tự bắt
+            // Nếu không, hãy log lỗi
+            // log.error("Lỗi Google Login: {}", e.getMessage());
+            throw new IdInvalidException("Lỗi xác minh Google token hoặc logic đăng nhập: " + e.getMessage());
         }
     }
 
@@ -244,6 +254,8 @@ public class AuthController {
 
         if (currentUserDB != null) {
             userLogin.setId(currentUserDB.getId());
+            userLogin.setMainResume(currentUserDB.getMainResume());
+
             userLogin.setEmail(currentUserDB.getEmail());
             userLogin.setName(currentUserDB.getName());
             userLogin.setGender(currentUserDB.getGender());
@@ -253,6 +265,7 @@ public class AuthController {
             userLogin.setPublic(currentUserDB.isPublic());
             userLogin.setRole(currentUserDB.getRole());
             userLogin.setVip(currentUserDB.isVip());
+
             userLogin.setVipExpiryDate(currentUserDB.getVipExpiryDate());
 
             userLogin.setCompany(currentUserDB.getCompany() != null
@@ -275,68 +288,70 @@ public class AuthController {
         return ResponseEntity.ok().body(userGetAccount);
     }
 
+    // ========== SỬA PHƯƠNG THỨC NÀY ==========
     @GetMapping("/auth/refresh")
     @ApiMessage("Get User by refresh token")
     public ResponseEntity<ResLoginDTO> getRefreshToken(
             @CookieValue(name = "refresh_token", defaultValue = "abc") String refresh_token) throws IdInvalidException {
+
         if (refresh_token.equals("abc")) {
             throw new IdInvalidException("Bạn không có refresh token ở cookie");
         }
-        // check valid
+
+        // Bước 1: Decode
         Jwt decodedToken = this.securityUtil.checkValidRefreshToken(refresh_token);
+        //
+        // // ========== LỚP PHÒNG THỦ MỚI ==========
+        // // Thêm "Thời gian ân hạn" 10 giây
+        // Instant issuedAt = decodedToken.getIssuedAt();
+        // Instant now = Instant.now();
+        // if (issuedAt.isAfter(now.minusSeconds(1))) {
+        // // Token này vừa được cấp dưới 10 giây trước
+        // // Đây là hành vi đáng ngờ của bot/hacker
+        // log.warn("Refresh token bị lạm dụng. JTI: {}",
+        // decodedToken.getClaimAsString("jti"));
+        // throw new IdInvalidException("Refresh token rate limit exceeded."); // Hoặc
+        // 429 Too Many Requests
+        // }
+        // // ======================================
         String email = decodedToken.getSubject();
+        String jti = decodedToken.getClaimAsString("jti");
 
-        // check user by token + email
-        User currentUser = this.userService.getUserByRefreshTokenAndEmail(refresh_token, email);
-        if (currentUser == null) {
-            throw new IdInvalidException("Refresh Token không hợp lệ");
+        // Bước 2: Kiểm tra JTI Blacklist (bắt các token đã bị refresh/logout)
+        if (blacklistService.isTokenBlacklisted(jti)) {
+            throw new IdInvalidException("Refresh Token đã bị vô hiệu hóa. Vui lòng đăng nhập lại.");
         }
 
-        // issue new token/set refresh token as cookies
+        // Bước 3: Kiểm tra token trong DB (bắt lỗi của bạn)
+        UserSession session = this.userService.findSessionByJti(jti)
+                .orElseThrow(() -> new IdInvalidException("Refresh Token không hợp lệ (Session không tồn tại)"));
+
+        // Bước 4: Tạo token mới
         ResLoginDTO res = new ResLoginDTO();
-        User currentUserDB = this.userService.handleGetUserByUsername(email);
+        User currentUserDB = this.userService.handleGetUserByUsername(email); // Lấy user mới nhất
         if (currentUserDB != null) {
-            ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin(
-                    currentUserDB.getId(),
-                    currentUserDB.getEmail(),
-                    currentUserDB.getName(),
-                    currentUserDB.getGender(),
-                    currentUserDB.getAddress(),
-                    currentUserDB.getAge(),
-                    currentUserDB.getAvatar(),
-                    currentUserDB.isPublic(),
-                    currentUserDB.getRole(),
-                    currentUserDB.isVip(),
-                    currentUserDB.getVipExpiryDate(),
 
-                    currentUserDB.getCompany() != null
-                            ? new ResLoginDTO.UserLogin.CompanyUser(
-                                    currentUserDB.getCompany().getId(),
-                                    currentUserDB.getCompany().getName(),
-                                    currentUserDB.getCompany().getDescription(),
-                                    currentUserDB.getCompany().getAddress(),
-                                    currentUserDB.getCompany().getLogo(),
-                                    currentUserDB.getCompany().getField(),
-                                    currentUserDB.getCompany().getWebsite(),
-                                    currentUserDB.getCompany().getScale(),
-                                    currentUserDB.getCompany().getCountry(),
-                                    currentUserDB.getCompany().getFoundingYear(),
-                                    currentUserDB.getCompany().getLocation())
-                            : null);
-            res.setUser(userLogin);
+            res.setUser(this.convertUserToUserLogin(currentUserDB));
         }
 
-        // create access token
         String access_token = this.securityUtil.createAccessToken(email, res);
         res.setAccessToken(access_token);
 
-        // create refresh token
         String new_refresh_token = this.securityUtil.createRefreshToken(email, res);
 
-        // update user
-        this.userService.updateUserToken(new_refresh_token, email);
+        // Bước 5: Cập nhật DB
+        // this.userService.updateUserToken(new_refresh_token, email);
+        this.userService.deleteSessionByJti(jti);
+        Jwt newDecodedRefresh = this.securityUtil.checkValidRefreshToken(new_refresh_token);
+        String newJti = newDecodedRefresh.getClaimAsString("jti");
+        Instant newExpiresAt = newDecodedRefresh.getExpiresAt();
+        this.userService.createNewSession(session.getUser(), newJti, newExpiresAt); // Dùng user từ session cũ
 
-        // set cookies
+        // Bước 6: ĐƯA TOKEN CŨ VÀO BLACKLIST
+        Instant oldTokenExpiry = decodedToken.getExpiresAt();
+        blacklistService.blacklistToken(jti, oldTokenExpiry);
+
+        // Bước 7: Set cookie
         ResponseCookie resCookies = ResponseCookie
                 .from("refresh_token", new_refresh_token)
                 .httpOnly(true)
@@ -349,20 +364,53 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, resCookies.toString())
                 .body(res);
     }
+    // ========== KẾT THÚC SỬA ==========
 
+    // ========== SỬA LẠI HOÀN TOÀN PHƯƠNG THỨC NÀY ==========
     @PostMapping("/auth/logout")
     @ApiMessage("Logout User")
-    public ResponseEntity<Void> logout() throws IdInvalidException {
-        String email = SecurityUtil.getCurrentUserLogin().isPresent() ? SecurityUtil.getCurrentUserLogin().get() : "";
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = "refresh_token", defaultValue = "abc") String refresh_token)
+            throws IdInvalidException {
 
-        if (email.equals("")) {
+        String email = SecurityUtil.getCurrentUserLogin().orElse(null);
+        if (email == null) {
             throw new IdInvalidException("Access Token không hợp lệ");
         }
 
-        // update refresh token = null
-        this.userService.updateUserToken(null, email);
+        // 1. Blacklist Access Token (lấy từ header)
+        SecurityUtil.getCurrentUserJWT().ifPresent(token -> {
+            try {
+                Jwt decodedAccess = this.jwtDecoder.decode(token);
+                String jti = decodedAccess.getClaimAsString("jti");
+                Instant expiry = decodedAccess.getExpiresAt();
+                blacklistService.blacklistToken(jti, expiry);
+            } catch (Exception e) {
+                // Bỏ qua
+            }
+        });
 
-        // remove refresh token cookie
+        // 2. Blacklist Refresh Token (lấy từ cookie)
+        if (!refresh_token.equals("abc")) {
+            try {
+                Jwt decodedRefresh = this.securityUtil.checkValidRefreshToken(refresh_token);
+                String jti = decodedRefresh.getClaimAsString("jti");
+                Instant expiry = decodedRefresh.getExpiresAt();
+
+                // Thêm vào blacklist
+                blacklistService.blacklistToken(jti, expiry);
+
+                // Xóa khỏi DB session
+                this.userService.deleteSessionByJti(jti);
+            } catch (Exception e) {
+                // Bỏ qua
+            }
+        }
+
+        // 3. Xóa token trong DB
+        // this.userService.updateUserToken(null, email);
+
+        // 4. Xóa cookie
         ResponseCookie deleteSpringCookie = ResponseCookie
                 .from("refresh_token", null)
                 .httpOnly(true)
@@ -376,6 +424,7 @@ public class AuthController {
                 .body(null);
     }
 
+    // ========== KẾT THÚC SỬA ==========
     /**
      * Endpoint mới: Gửi OTP để xác thực email đăng ký.
      */
@@ -433,7 +482,10 @@ public class AuthController {
 
     @PostMapping("/auth/change-password")
     @ApiMessage("Đổi mật khẩu")
-    public ResponseEntity<Void> changePassword(@Valid @RequestBody ReqChangePasswordDTO changePasswordDTO)
+    public ResponseEntity<ResChangePasswordDTO> changePassword( // 1. Đổi kiểu trả về
+            @Valid @RequestBody ReqChangePasswordDTO changePasswordDTO,
+            @CookieValue(name = "refresh_token", defaultValue = "abc") String current_refresh_token) // 2. Lấy token
+                                                                                                     // hiện tại
             throws IdInvalidException {
         String email = SecurityUtil.getCurrentUserLogin()
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy user"));
@@ -442,18 +494,64 @@ public class AuthController {
             throw new IdInvalidException("User không tồn tại");
         }
 
-        // Nếu password null (Google login), cho phép đổi mà không cần oldPassword
         if (user.getPassword() != null) {
-            // Yêu cầu oldPassword nếu password không null
             if (changePasswordDTO.getOldPassword() == null
                     || !passwordEncoder.matches(changePasswordDTO.getOldPassword(), user.getPassword())) {
-                throw new IdInvalidException("Mật khẩu cũ không đúng. Nếu quên mật khẩu, hãy yêu cầu OTP.");
+                throw new IdInvalidException("Mật khẩu cũ không đúng...");
             }
         }
 
-        user.setPassword(passwordEncoder.encode(changePasswordDTO.getNewPassword()));
-        userService.handleUpdateUser(user);
-        return ResponseEntity.ok().build();
+        // 3. SỬA BUG & THÊM TÍNH NĂNG:
+        // Gọi service đã tạo ở Bước 3 để lưu pass + cập nhật timestamp
+        User updatedUser = userService.saveUserWithNewPassword(user, changePasswordDTO.getNewPassword());
+
+        // 4. TẠO TOKEN MỚI (để giữ user đăng nhập)
+        ResLoginDTO newLoginDto = new ResLoginDTO();
+
+        newLoginDto.setUser(this.convertUserToUserLogin(updatedUser));
+
+        String access_token = this.securityUtil.createAccessToken(email, newLoginDto);
+        newLoginDto.setAccessToken(access_token);
+        String new_refresh_token = this.securityUtil.createRefreshToken(email, newLoginDto);
+
+        // 5. CẬP NHẬT SESSION TRONG DB
+        // Xóa session cũ (của refresh token hiện tại)
+        if (!current_refresh_token.equals("abc")) {
+            try {
+                Jwt decodedOld = this.securityUtil.checkValidRefreshToken(current_refresh_token);
+                String oldJti = decodedOld.getClaimAsString("jti");
+                this.userService.deleteSessionByJti(oldJti);
+                this.blacklistService.blacklistToken(oldJti, decodedOld.getExpiresAt());
+            } catch (Exception e) {
+                /* Bỏ qua */ }
+        }
+
+        // Tạo session mới (cho refresh token mới)
+        Jwt decodedNew = this.securityUtil.checkValidRefreshToken(new_refresh_token);
+        String newJti = decodedNew.getClaimAsString("jti");
+        Instant newExpiresAt = decodedNew.getExpiresAt();
+        this.userService.createNewSession(updatedUser, newJti, newExpiresAt);
+
+        // 6. LẤY DANH SÁCH CÁC SESSION CÒN LẠI
+        // (Timestamp đã vô hiệu hóa access token của chúng, nhưng refresh token vẫn
+        // còn)
+        List<UserSession> allSessions = this.userService.getSessionsForUser(updatedUser.getId());
+
+        // 7. TẠO RESPONSE BODY
+        ResChangePasswordDTO responseBody = new ResChangePasswordDTO(newLoginDto, allSessions, newJti);
+
+        // 8. TẠO COOKIE MỚI
+        ResponseCookie resCookies = ResponseCookie
+                .from("refresh_token", new_refresh_token)
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(refreshTokenExpiration)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, resCookies.toString())
+                .body(responseBody);
     }
 
     @PostMapping("/auth/send-otp")
@@ -473,7 +571,7 @@ public class AuthController {
 
     @PostMapping("/auth/verify-otp-change-password")
     @ApiMessage("Xác minh OTP và đổi mật khẩu")
-    public ResponseEntity<Void> verifyOtpAndChangePassword(
+    public ResponseEntity<ResLoginDTO> verifyOtpAndChangePassword( // 1. Đổi kiểu trả về
             @Valid @RequestBody ReqVerifyOtpChangePasswordDTO verifyOtpDTO) throws IdInvalidException {
         otpService.validateOtp(verifyOtpDTO.getEmail(), verifyOtpDTO.getOtpCode());
         User user = userService.handleGetUserByUsername(verifyOtpDTO.getEmail());
@@ -481,8 +579,263 @@ public class AuthController {
             throw new IdInvalidException("User không tồn tại");
         }
 
-        user.setPassword(passwordEncoder.encode(verifyOtpDTO.getNewPassword()));
-        userService.handleUpdateUser(user);
+        // 2. Cập nhật password VÀ timestamp
+        User updatedUser = userService.saveUserWithNewPassword(user, verifyOtpDTO.getNewPassword());
+
+        // 3. VÔ HIỆU HÓA TẤT CẢ SESSION CŨ
+        List<UserSession> allSessions = this.userService.getSessionsForUser(updatedUser.getId());
+        if (allSessions != null && !allSessions.isEmpty()) {
+            this.userSessionRepository.deleteAll(allSessions);
+        }
+
+        // 4. TẠO TOKEN MỚI (để đăng nhập ngay)
+        ResLoginDTO res = new ResLoginDTO();
+
+        res.setUser(this.convertUserToUserLogin(updatedUser));
+        String access_token = this.securityUtil.createAccessToken(updatedUser.getEmail(), res);
+        res.setAccessToken(access_token);
+        String refresh_token = this.securityUtil.createRefreshToken(updatedUser.getEmail(), res);
+
+        // 5. TẠO SESSION MỚI
+        Jwt decodedNew = this.securityUtil.checkValidRefreshToken(refresh_token);
+        String newJti = decodedNew.getClaimAsString("jti");
+        Instant newExpiresAt = decodedNew.getExpiresAt();
+        this.userService.createNewSession(updatedUser, newJti, newExpiresAt);
+
+        // 6. TẠO COOKIE
+        ResponseCookie resCookies = ResponseCookie
+                .from("refresh_token", refresh_token)
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(refreshTokenExpiration)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, resCookies.toString())
+                .body(res);
+    }
+
+    @GetMapping("/auth/sessions")
+    @ApiMessage("Lấy danh sách các thiết bị đang đăng nhập")
+    public ResponseEntity<List<ResSessionDTO>> getActiveSessions(
+            @CookieValue(name = "refresh_token", defaultValue = "abc") String current_refresh_token)
+            throws IdInvalidException {
+
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy user"));
+        User user = userService.handleGetUserByUsername(email);
+        if (user == null) {
+            throw new IdInvalidException("User không tồn tại");
+        }
+
+        // Lấy JTI của session hiện tại
+        String currentJti = null;
+        if (!current_refresh_token.equals("abc")) {
+            try {
+                currentJti = this.securityUtil.checkValidRefreshToken(current_refresh_token).getClaimAsString("jti");
+            } catch (Exception e) {
+                /* Bỏ qua */ }
+        }
+
+        List<UserSession> sessions = this.userService.getSessionsForUser(user.getId());
+
+        final String finalCurrentJti = currentJti;
+        List<ResSessionDTO> dtos = sessions.stream()
+                .map(s -> new ResSessionDTO(s, finalCurrentJti))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(dtos);
+    }
+
+    // --- API MỚI 2: Đăng xuất một session cụ thể (theo ID session) ---
+    @DeleteMapping("/auth/sessions/{id}")
+    @ApiMessage("Đăng xuất một thiết bị cụ thể")
+    public ResponseEntity<Void> logoutSession(
+            @PathVariable("id") long sessionId,
+            @CookieValue(name = "refresh_token", defaultValue = "abc") String current_refresh_token) // Lấy cookie
+            throws IdInvalidException {
+
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy user"));
+        User user = userService.handleGetUserByUsername(email);
+        if (user == null) {
+            throw new IdInvalidException("User không tồn tại");
+        }
+
+        // Lấy JTI hiện tại để đảm bảo không tự xóa mình
+        if (current_refresh_token.equals("abc")) {
+            throw new IdInvalidException("Không tìm thấy refresh token hiện tại");
+        }
+        String currentJti = this.securityUtil.checkValidRefreshToken(current_refresh_token).getClaimAsString("jti");
+        UserSession currentSession = this.userService.findSessionByJti(currentJti)
+                .orElseThrow(() -> new IdInvalidException("Session hiện tại không hợp lệ"));
+
+        // Ngăn user xóa chính mình
+        if (currentSession.getId() == sessionId) {
+            throw new IdInvalidException("Bạn không thể xóa session hiện tại. Vui lòng dùng /auth/logout.");
+        }
+
+        // 1. Xóa session (Vô hiệu hóa Refresh Token của nó)
+        this.userService.deleteSessionById(sessionId, user.getId());
+
+        // 2. Cập nhật timestamp (Vô hiệu hóa Access Token của nó)
+        user.setLastSecurityUpdateAt(Instant.now());
+        this.userService.saveUser(user); // 'saveUser' sẽ dọn dẹp cache
+
+        // 3. Trả về 200 OK.
+        // Lần gọi API tiếp theo của thiết bị hiện tại sẽ fail 401,
+        // và FE interceptor sẽ tự động refresh.
         return ResponseEntity.ok().build();
+    }
+
+    // ========== API XÓA NHIỀU SESSION ==========
+    @DeleteMapping("/auth/sessions")
+    @ApiMessage("Đăng xuất nhiều thiết bị cụ thể")
+    public ResponseEntity<Void> logoutSessions(
+            @Valid @RequestBody ReqDeleteSessionsDTO deleteDTO,
+            @CookieValue(name = "refresh_token", defaultValue = "abc") String current_refresh_token) // Lấy cookie
+            throws IdInvalidException {
+
+        String email = SecurityUtil.getCurrentUserLogin()
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy user"));
+        User user = userService.handleGetUserByUsername(email);
+        if (user == null) {
+            throw new IdInvalidException("User không tồn tại");
+        }
+
+        // Lấy session HIỆN TẠI để tránh tự xóa
+        if (current_refresh_token.equals("abc")) {
+            throw new IdInvalidException("Không tìm thấy refresh token hiện tại");
+        }
+        String currentJti = this.securityUtil.checkValidRefreshToken(current_refresh_token).getClaimAsString("jti");
+        UserSession currentSession = this.userService.findSessionByJti(currentJti)
+                .orElseThrow(() -> new IdInvalidException("Session hiện tại không hợp lệ"));
+
+        // Lọc danh sách: Xóa ID của session hiện tại khỏi danh sách (nếu có)
+        List<Long> idsToDelete = deleteDTO.getIds();
+        if (idsToDelete != null && !idsToDelete.isEmpty()) {
+            idsToDelete.remove(currentSession.getId());
+        }
+
+        // 1. Xóa các session mục tiêu (Vô hiệu hóa REFRESH tokens)
+        this.userService.deleteSessionsByIds(idsToDelete, user.getId());
+
+        // 2. Cập nhật timestamp (Vô hiệu hóa ACCESS tokens)
+        user.setLastSecurityUpdateAt(Instant.now());
+        this.userService.saveUser(user); // 'saveUser' sẽ dọn dẹp cache
+
+        // 3. Trả về 200 OK.
+        // FE sẽ tự refresh token ở lần gọi API 401 tiếp theo.
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/auth/login-otp/send")
+    @ApiMessage("Gửi OTP đăng nhập")
+    public ResponseEntity<Void> sendLoginOtp(@Valid @RequestBody ReqSendOtpDTO sendOtpDTO) throws IdInvalidException {
+        // 1. Kiểm tra user có tồn tại không
+        User user = this.userService.handleGetUserByUsername(sendOtpDTO.getEmail());
+        if (user == null) {
+            throw new IdInvalidException("Email không tồn tại hoặc chưa được đăng ký");
+        }
+
+        // 2. Tạo, lưu và gửi OTP
+        String otpCode = otpService.generateOtp();
+        otpService.saveOtp(sendOtpDTO.getEmail(), otpCode);
+        otpService.sendOtpEmail(sendOtpDTO.getEmail(), otpCode, "Mã OTP Đăng nhập JobHunter");
+
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/auth/login-otp/verify")
+    @ApiMessage("Xác thực OTP và đăng nhập (đá session cũ nhất nếu đầy)")
+    public ResponseEntity<ResLoginDTO> verifyOtpAndLogin(@Valid @RequestBody ReqLoginOtpDTO req)
+            throws IdInvalidException {
+
+        // 1. Xác thực OTP
+        otpService.validateOtp(req.getEmail(), req.getOtpCode());
+
+        // 2. Xác thực mật khẩu
+        User user = this.userService.handleGetUserByUsername(req.getEmail());
+        if (user == null || !passwordEncoder.matches(req.getPassword(), user.getPassword())) {
+            throw new IdInvalidException("Email hoặc Mật khẩu không chính xác");
+        }
+
+        // 3. Thực thi logic "đá session cũ nhất" nếu đã đầy
+        this.userService.enforceSessionLimitAndKickOldest(user);
+
+        // 4. CẬP NHẬT TIMESTAMP BẢO MẬT
+        // (Việc này sẽ vô hiệu hóa access token của session vừa bị đá,
+        // và cũng buộc các session hợp lệ khác phải refresh token)
+        user.setLastSecurityUpdateAt(Instant.now());
+        User updatedUser = this.userService.saveUser(user); // saveUser đã được cấu hình dọn cache
+
+        // 5. Đăng nhập người dùng (Tạo token mới + session mới)
+
+        // 5.1 Map DTO (Giống hệt /auth/login)
+        ResLoginDTO res = new ResLoginDTO();
+
+        res.setUser(this.convertUserToUserLogin(updatedUser));
+
+        // 5.2 Tạo tokens
+        String access_token = this.securityUtil.createAccessToken(updatedUser.getEmail(), res);
+        res.setAccessToken(access_token);
+        String refresh_token = this.securityUtil.createRefreshToken(updatedUser.getEmail(), res);
+
+        // 5.3 Tạo UserSession mới
+        Jwt decodedRefresh = this.securityUtil.checkValidRefreshToken(refresh_token);
+        String jti = decodedRefresh.getClaimAsString("jti");
+        Instant expiresAt = decodedRefresh.getExpiresAt();
+        this.userService.createNewSession(updatedUser, jti, expiresAt);
+
+        // 5.4 Tạo Cookie
+        ResponseCookie resCookies = ResponseCookie
+                .from("refresh_token", refresh_token)
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(refreshTokenExpiration)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, resCookies.toString())
+                .body(res);
+    }
+
+    private ResLoginDTO.UserLogin convertUserToUserLogin(User user) {
+        // 1. Xử lý Company lồng bên trong
+        ResLoginDTO.UserLogin.CompanyUser companyUser = null;
+        if (user.getCompany() != null) {
+            companyUser = new ResLoginDTO.UserLogin.CompanyUser(
+                    user.getCompany().getId(),
+                    user.getCompany().getName(),
+                    user.getCompany().getDescription(),
+                    user.getCompany().getAddress(),
+                    user.getCompany().getLogo(),
+                    user.getCompany().getField(),
+                    user.getCompany().getWebsite(),
+                    user.getCompany().getScale(),
+                    user.getCompany().getCountry(),
+                    user.getCompany().getFoundingYear(),
+                    user.getCompany().getLocation());
+
+        }
+
+        // 2. Map User chính
+        return new ResLoginDTO.UserLogin(
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                user.getGender(),
+                user.getAddress(),
+                user.getAge(),
+                user.getAvatar(),
+                user.isPublic(),
+                user.getRole(),
+                user.isVip(),
+                user.getVipExpiryDate(),
+                user.getMainResume(),
+                companyUser // truyền đối tượng company đã xử lý vào
+        );
     }
 }

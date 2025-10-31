@@ -5,10 +5,14 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import vn.hoidanit.jobhunter.domain.entity.Comment;
+import vn.hoidanit.jobhunter.domain.entity.Company;
+import vn.hoidanit.jobhunter.domain.entity.User;
 
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long>, JpaSpecificationExecutor<Comment> {
 
     void deleteByUserId(long userId);
+
+    boolean existsByUserAndCompany(User user, Company company);
 
 }

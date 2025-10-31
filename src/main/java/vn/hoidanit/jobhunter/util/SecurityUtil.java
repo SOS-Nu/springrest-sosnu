@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -29,14 +30,18 @@ import org.springframework.stereotype.Service;
 import com.nimbusds.jose.util.Base64;
 
 import vn.hoidanit.jobhunter.domain.response.ResLoginDTO;
+import vn.hoidanit.jobhunter.service.RedisTokenBlacklistService;
+import vn.hoidanit.jobhunter.service.UserService;
 
 @Service
 public class SecurityUtil {
 
     private final JwtEncoder jwtEncoder;
+    private final UserService userService;
 
-    public SecurityUtil(JwtEncoder jwtEncoder) {
+    public SecurityUtil(JwtEncoder jwtEncoder, UserService userService) {
         this.jwtEncoder = jwtEncoder;
+        this.userService = userService;
     }
 
     public static final MacAlgorithm JWT_ALGORITHM = MacAlgorithm.HS512;
@@ -57,13 +62,11 @@ public class SecurityUtil {
         userToken.setName(dto.getUser().getName());
 
         Instant now = Instant.now();
+        // Đảm bảo ở đây là ChronoUnit
         Instant validity = now.plus(this.accessTokenExpiration, ChronoUnit.SECONDS);
 
-        // hardcode permission (for testing)
-        List<String> listAuthority = new ArrayList<String>();
-
-        listAuthority.add("ROLE_USER_CREATE");
-        listAuthority.add("ROLE_USER_UPDATE");
+        List<String> listAuthority = this.userService.getPermissionKeysByEmail(email);
+        String jti = UUID.randomUUID().toString();
 
         // @formatter:off
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -72,34 +75,43 @@ public class SecurityUtil {
             .subject(email)
             .claim("user", userToken)
             .claim("permission", listAuthority)
+            .claim("jti", jti)
             .build();
+        // @formatter:on
 
         JwsHeader jwsHeader = JwsHeader.with(JWT_ALGORITHM).build();
         return this.jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, claims)).getTokenValue();
-
     }
 
+    // ========== SỬA PHƯƠNG THỨC NÀY ==========
     public String createRefreshToken(String email, ResLoginDTO dto) {
         Instant now = Instant.now();
+
+        // ========== SỬA LỖI TẠI ĐÂY ==========
+        // Phải dùng refreshTokenExpiration, KHÔNG PHẢI accessTokenExpiration
         Instant validity = now.plus(this.refreshTokenExpiration, ChronoUnit.SECONDS);
+        // ========== KẾT THÚC SỬA ==========
 
         ResLoginDTO.UserInsideToken userToken = new ResLoginDTO.UserInsideToken();
         userToken.setId(dto.getUser().getId());
         userToken.setEmail(dto.getUser().getEmail());
         userToken.setName(dto.getUser().getName());
+        String jti = UUID.randomUUID().toString();
 
         // @formatter:off
         JwtClaimsSet claims = JwtClaimsSet.builder()
             .issuedAt(now)
-            .expiresAt(validity)
+            .expiresAt(validity) // Dùng validity đã sửa
             .subject(email)
             .claim("user", userToken)
+            .claim("jti", jti) 
             .build();
+        // @formatter:on
 
         JwsHeader jwsHeader = JwsHeader.with(JWT_ALGORITHM).build();
         return this.jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, claims)).getTokenValue();
-
     }
+    // ========== KẾT THÚC SỬA ==========
 
     private SecretKey getSecretKey() {
         byte[] keyBytes = Base64.from(jwtKey).decode();
@@ -107,17 +119,24 @@ public class SecurityUtil {
                 JWT_ALGORITHM.getName());
     }
 
-    public Jwt checkValidRefreshToken(String token){
-     NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withSecretKey(
+    public Jwt checkValidRefreshToken(String token) {
+        NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withSecretKey(
                 getSecretKey()).macAlgorithm(SecurityUtil.JWT_ALGORITHM).build();
-                try {
-                     return jwtDecoder.decode(token);
-                } catch (Exception e) {
-                    System.out.println(">>> Refresh Token error: " + e.getMessage());
-                    throw e;
-                }
+        try {
+            return jwtDecoder.decode(token);
+        } catch (Exception e) {
+            System.out.println(">>> Refresh Token error: " + e.getMessage());
+            throw e;
+        }
     }
-    
+
+    /**
+     * Lấy số giây còn lại từ thời điểm hiện tại đến expiresAt.
+     */
+    public static long getRemainingSeconds(Instant expiresAt) {
+        return RedisTokenBlacklistService.getRemainingSeconds(expiresAt);
+    }
+
     /**
      * Get the login of the current user.
      *
@@ -149,8 +168,8 @@ public class SecurityUtil {
     public static Optional<String> getCurrentUserJWT() {
         SecurityContext securityContext = SecurityContextHolder.getContext();
         return Optional.ofNullable(securityContext.getAuthentication())
-            .filter(authentication -> authentication.getCredentials() instanceof String)
-            .map(authentication -> (String) authentication.getCredentials());
+                .filter(authentication -> authentication.getCredentials() instanceof String)
+                .map(authentication -> (String) authentication.getCredentials());
     }
 
     /**
@@ -159,8 +178,10 @@ public class SecurityUtil {
      * @return true if the user is authenticated, false otherwise.
      */
     // public static boolean isAuthenticated() {
-    //     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    //     return authentication != null && getAuthorities(authentication).noneMatch(AuthoritiesConstants.ANONYMOUS::equals);
+    // Authentication authentication =
+    // SecurityContextHolder.getContext().getAuthentication();
+    // return authentication != null &&
+    // getAuthorities(authentication).noneMatch(AuthoritiesConstants.ANONYMOUS::equals);
     // }
 
     /**
@@ -170,20 +191,24 @@ public class SecurityUtil {
      * @return true if the current user has any of the authorities, false otherwise.
      */
     // public static boolean hasCurrentUserAnyOfAuthorities(String... authorities) {
-    //     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    //     return (
-    //         authentication != null && getAuthorities(authentication).anyMatch(authority -> Arrays.asList(authorities).contains(authority))
-    //     );
+    // Authentication authentication =
+    // SecurityContextHolder.getContext().getAuthentication();
+    // return (
+    // authentication != null && getAuthorities(authentication).anyMatch(authority
+    // -> Arrays.asList(authorities).contains(authority))
+    // );
     // }
 
     /**
      * Checks if the current user has none of the authorities.
      *
      * @param authorities the authorities to check.
-     * @return true if the current user has none of the authorities, false otherwise.
+     * @return true if the current user has none of the authorities, false
+     *         otherwise.
      */
-    // public static boolean hasCurrentUserNoneOfAuthorities(String... authorities) {
-    //     return !hasCurrentUserAnyOfAuthorities(authorities);
+    // public static boolean hasCurrentUserNoneOfAuthorities(String... authorities)
+    // {
+    // return !hasCurrentUserAnyOfAuthorities(authorities);
     // }
 
     /**
@@ -193,19 +218,20 @@ public class SecurityUtil {
      * @return true if the current user has the authority, false otherwise.
      */
     // public static boolean hasCurrentUserThisAuthority(String authority) {
-    //     return hasCurrentUserAnyOfAuthorities(authority);
+    // return hasCurrentUserAnyOfAuthorities(authority);
     // }
 
     // private static Stream<String> getAuthorities(Authentication authentication) {
-    //     return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority);
+    // return
+    // authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority);
     // }
-
 
     /**
      * PHƯƠNG THỨC MỚI ĐƯỢC THÊM VÀO
      * Băm một chuỗi đầu vào sử dụng thuật toán MD5.
      * Dùng để tạo cache key nhất quán.
      * * @param input Chuỗi cần băm.
+     * 
      * @return Chuỗi đã được băm dưới dạng hex.
      */
     public static String hash(String input) {

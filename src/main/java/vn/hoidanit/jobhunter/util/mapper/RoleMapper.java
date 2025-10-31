@@ -8,5 +8,7 @@ import vn.hoidanit.jobhunter.domain.entity.Role;
 @Mapper(componentModel = "spring", uses = { PermissionMapper.class })
 public interface RoleMapper {
     RoleDTO toDto(Role role);
+
     // List<RoleDTO> toDtoList(List<Role> roles);
+    // .\bin\windows\kafka-server-start.bat .\config\kraft\server.properties
 }

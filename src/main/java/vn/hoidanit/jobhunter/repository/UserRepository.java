@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.domain.entity.UserSession;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @Repository
@@ -22,8 +23,6 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
         User findByEmail(String Email);
 
         boolean existsByEmail(String email);
-
-        User findByRefreshTokenAndEmail(String token, String email);
 
         List<User> findByCompany(Company company);
 
