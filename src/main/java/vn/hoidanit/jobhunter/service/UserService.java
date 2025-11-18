@@ -150,7 +150,7 @@ public class UserService {
         return new ResUploadFileDTO(uploadedFileName, Instant.now());
     }
 
-    public User handleCreateUser(User user) {
+    public User handleCreateUser(User user) throws IdInvalidException {
         // company
         if (user.getCompany() != null) {
             Optional<Company> companyOptional = this.companyService.findById(user.getCompany().getId());
@@ -163,7 +163,14 @@ public class UserService {
             Role roleRef = this.roleRepository.getReferenceById(user.getRole().getId());
             user.setRole(roleRef);
         } else {
-            user.setRole(null);
+            Role roleFromDb = this.roleRepository.findByName("USER"); // Trả về Role hoặc null
+
+            if (roleFromDb == null) {
+                // Kiểm tra null thủ công
+                throw new IdInvalidException("Không tìm thấy Role 'USER' trong hệ thống");
+            }
+
+            user.setRole(roleFromDb);
         }
 
         return this.userRepository.save(user);
@@ -895,4 +902,5 @@ public class UserService {
         // 2. Bọc kết quả (có thể là null) vào trong Optional trước khi trả về
         return user;
     }
+
 }

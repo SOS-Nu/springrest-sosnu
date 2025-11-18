@@ -96,7 +96,7 @@ public class FileService {
     }
 
     /**
-     * PHƯƠNG THỨC MỚI: Đọc một file từ storage và trả về dưới dạng byte array.
+     * Đọc một file từ storage và trả về dưới dạng byte array.
      * 
      * @param fileName Tên file
      * @param folder   Thư mục chứa file
@@ -119,7 +119,7 @@ public class FileService {
     }
 
     /**
-     * PHƯƠNG THỨC MỚI: Trích xuất nội dung văn bản từ một file đã được lưu trữ.
+     * Trích xuất nội dung văn bản từ một file đã được lưu trữ.
      *
      * @param fileName Tên file cần trích xuất.
      * @param folder   Thư mục chứa file.
@@ -136,7 +136,7 @@ public class FileService {
     }
 
     /**
-     * PHƯƠNG THỨC MỚI: Trích xuất nội dung văn bản từ một mảng byte.
+     * Trích xuất nội dung văn bản từ một mảng byte.
      *
      * @param fileBytes Mảng byte của file.
      * @return Nội dung văn bản.
