@@ -45,7 +45,8 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 "/api/v1/gemini/search-results/**",
                 "/api/v1/gemini/initiate-search/**",
                 "/actuator/health", "/actuator/prometheus",
-                "/error"
+                "/error",
+                "/api/v1/payment/export/**"
 
         };
         registry.addInterceptor(getPermissionInterceptor())
