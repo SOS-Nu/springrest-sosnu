@@ -1,0 +1,9 @@
+.git
+.gradle
+build
+out
+target
+*.jar
+# Chặn luôn thư mục fe và build-docker để tránh copy nhầm nếu config sai
+../fe
+../build-docker
