@@ -2,9 +2,15 @@ package vn.hoidanit.jobhunter.domain.response;
 
 import java.time.LocalDateTime;
 
+import lombok.Getter;
+import lombok.Setter;
 import vn.hoidanit.jobhunter.domain.entity.PaymentHistory.PaymentStatus;
 
+@Getter
+@Setter
 public class PaymentHistoryDTO {
+    private Long id;
+    private String userEmail; // <--- Thêm Email của User
     private Long userId;
     private Long amount;
     private String orderId;
@@ -14,7 +20,8 @@ public class PaymentHistoryDTO {
     private LocalDateTime updatedAt;
     private String updatedBy;
 
-    public PaymentHistoryDTO(Long userId, Long amount, String orderId, String responseCode, PaymentStatus status,
+    public PaymentHistoryDTO(Long id, String userEmail, Long userId, Long amount, String orderId, String responseCode,
+            PaymentStatus status,
             LocalDateTime createdAt, LocalDateTime updatedAt, String updatedBy) {
         this.userId = userId;
         this.amount = amount;
@@ -24,70 +31,9 @@ public class PaymentHistoryDTO {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.updatedBy = updatedBy;
+        this.id = id;
+        this.userEmail = userEmail;
+
     }
 
-    // Getters and setters
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
-    public Long getAmount() {
-        return amount;
-    }
-
-    public void setAmount(Long amount) {
-        this.amount = amount;
-    }
-
-    public String getOrderId() {
-        return orderId;
-    }
-
-    public void setOrderId(String orderId) {
-        this.orderId = orderId;
-    }
-
-    public String getResponseCode() {
-        return responseCode;
-    }
-
-    public void setResponseCode(String responseCode) {
-        this.responseCode = responseCode;
-    }
-
-    public PaymentStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(PaymentStatus status) {
-        this.status = status;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public String getUpdatedBy() {
-        return updatedBy;
-    }
-
-    public void setUpdatedBy(String updatedBy) {
-        this.updatedBy = updatedBy;
-    }
 }

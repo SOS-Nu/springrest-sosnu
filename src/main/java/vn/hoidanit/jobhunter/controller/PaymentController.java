@@ -1,37 +1,53 @@
 package vn.hoidanit.jobhunter.controller;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.servlet.http.HttpServletRequest;
-import vn.hoidanit.jobhunter.domain.response.PaymentUrlResponseDTO;
-import vn.hoidanit.jobhunter.domain.response.RestResponse;
-import vn.hoidanit.jobhunter.domain.entity.PaymentHistory;
-import vn.hoidanit.jobhunter.domain.entity.User;
-import vn.hoidanit.jobhunter.domain.response.PaymentHistoryDTO;
-import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
-import vn.hoidanit.jobhunter.repository.PaymentHistoryRepository;
-import vn.hoidanit.jobhunter.service.UserService;
-import vn.hoidanit.jobhunter.util.SecurityUtil;
-import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
-import vn.hoidanit.jobhunter.util.error.IdInvalidException;
-
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.turkraft.springfilter.boot.Filter;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletRequest;
+import vn.hoidanit.jobhunter.domain.entity.PaymentHistory;
+import vn.hoidanit.jobhunter.domain.entity.User;
+import vn.hoidanit.jobhunter.domain.response.PaymentHistoryDTO;
+import vn.hoidanit.jobhunter.domain.response.PaymentUrlResponseDTO;
+import vn.hoidanit.jobhunter.domain.response.RestResponse;
+import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.repository.PaymentHistoryRepository;
+import vn.hoidanit.jobhunter.service.PaymentExportService;
+import vn.hoidanit.jobhunter.service.UserService;
+import vn.hoidanit.jobhunter.util.SecurityUtil;
+import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
+import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -39,6 +55,7 @@ public class PaymentController {
 
     private final UserService userService;
     private final PaymentHistoryRepository paymentHistoryRepository;
+    private final PaymentExportService paymentExportService;
 
     @Value("${vnp.TmnCode}")
     private String vnpTmnCode;
@@ -58,9 +75,11 @@ public class PaymentController {
     @Value("${vnpay.command}")
     private String vnpCommand;
 
-    public PaymentController(UserService userService, PaymentHistoryRepository paymentHistoryRepository) {
+    public PaymentController(UserService userService, PaymentExportService paymentExportService,
+            PaymentHistoryRepository paymentHistoryRepository) {
         this.userService = userService;
         this.paymentHistoryRepository = paymentHistoryRepository;
+        this.paymentExportService = paymentExportService;
     }
 
     @PostConstruct
@@ -200,6 +219,8 @@ public class PaymentController {
         List<PaymentHistoryDTO> history = paymentHistoryRepository.findByUser(user)
                 .stream()
                 .map(ph -> new PaymentHistoryDTO(
+                        ph.getId(),
+                        ph.getUser().getEmail(),
                         ph.getUser().getId(),
                         ph.getAmount(),
                         ph.getOrderId(),
@@ -229,6 +250,8 @@ public class PaymentController {
         List<PaymentHistoryDTO> history = paymentPage.getContent()
                 .stream()
                 .map(ph -> new PaymentHistoryDTO(
+                        ph.getId(),
+                        ph.getUser().getEmail(),
                         ph.getUser().getId(),
                         ph.getAmount(),
                         ph.getOrderId(),
@@ -265,6 +288,8 @@ public class PaymentController {
         PaymentHistory paymentHistory = paymentHistoryRepository.findById(id)
                 .orElseThrow(() -> new IdInvalidException("Payment history với ID " + id + " không tồn tại"));
         PaymentHistoryDTO dto = new PaymentHistoryDTO(
+                paymentHistory.getId(),
+                paymentHistory.getUser().getEmail(),
                 paymentHistory.getUser().getId(),
                 paymentHistory.getAmount(),
                 paymentHistory.getOrderId(),
@@ -301,6 +326,8 @@ public class PaymentController {
         paymentHistoryRepository.save(paymentHistory);
 
         PaymentHistoryDTO dto = new PaymentHistoryDTO(
+                paymentHistory.getId(),
+                paymentHistory.getUser().getEmail(),
                 paymentHistory.getUser().getId(),
                 paymentHistory.getAmount(),
                 paymentHistory.getOrderId(),
@@ -330,6 +357,82 @@ public class PaymentController {
         } catch (Exception e) {
             throw new RuntimeException("Lỗi khi tạo chữ ký HMAC-SHA512", e);
         }
+    }
+
+    @GetMapping("/payment/export/excel")
+    @ApiMessage("Export payment history to Excel")
+    public ResponseEntity<Resource> exportPaymentExcel(@Filter Specification<PaymentHistory> spec)
+            throws IdInvalidException, IOException {
+
+        // 1. Kiểm tra đăng nhập (giữ nguyên logic bảo mật của bạn)
+        String email = SecurityUtil.getCurrentUserLogin().orElseThrow(
+                () -> new IdInvalidException("Bạn cần đăng nhập"));
+        User user = userService.handleGetUserByUsername(email);
+        if (user == null)
+            throw new IdInvalidException("Người dùng không tồn tại");
+
+        // 2. Lấy dữ liệu: Dùng spec để lọc nhưng KHÔNG phân trang (lấy tất cả kết quả
+        // lọc)
+        List<PaymentHistory> histories = paymentHistoryRepository.findAll(spec);
+
+        // 3. Gọi service tạo file
+        ByteArrayInputStream in = paymentExportService.exportToExcel(histories);
+
+        // 4. Trả về file
+        InputStreamResource file = new InputStreamResource(in);
+        String filename = "Payment_Report_" + System.currentTimeMillis() + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(file);
+    }
+
+    // --- API XUẤT WORD ---
+    @GetMapping("/payment/export/monthly-report")
+    @ApiMessage("Export monthly revenue report via Template")
+    public ResponseEntity<Resource> exportMonthlyReport(
+            @RequestParam("month") int month,
+            @RequestParam("year") int year) throws IOException, IdInvalidException {
+
+        // 1. Lấy thông tin người request (để điền vào mục Người lập báo cáo)
+        String email = SecurityUtil.getCurrentUserLogin().orElseThrow(
+                () -> new IdInvalidException("Bạn cần đăng nhập"));
+
+        // 2. Gọi Service
+        ByteArrayInputStream in = paymentExportService.exportReportByMonth(month, year, email);
+
+        // 3. Trả về file
+        InputStreamResource file = new InputStreamResource(in);
+        String filename = "Bao_Cao_Thang_" + month + "_" + year + ".docx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType
+                        .parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .body(file);
+    }
+
+    @GetMapping("/payment/export/yearly-report")
+    @ApiMessage("Export yearly revenue report")
+    public ResponseEntity<Resource> exportYearlyReport(
+            @RequestParam("year") int year) throws IOException, IdInvalidException {
+
+        String email = SecurityUtil.getCurrentUserLogin().orElseThrow(
+                () -> new IdInvalidException("Bạn cần đăng nhập"));
+
+        // Gọi hàm exportByYear
+        ByteArrayInputStream in = paymentExportService.exportReportByYear(year, email);
+
+        InputStreamResource file = new InputStreamResource(in);
+        String filename = "Bao_Cao_Nam_" + year + ".docx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType
+                        .parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .body(file);
     }
 
     static class PaymentResponse {
