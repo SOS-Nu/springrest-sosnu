@@ -176,4 +176,64 @@ public class PaymentExportService {
         }
     }
 
+    public ByteArrayInputStream exportReportByYear(int year, String creatorName) throws IOException {
+
+        // 1. Lấy dữ liệu thô từ DB
+        Long totalTxn = paymentHistoryRepository.countSuccessTransactionsByYear(year);
+        List<Object[]> rawData = paymentHistoryRepository.getMonthlyRevenueByYear(year);
+
+        // 2. Chuyển List<Object[]> thành Map<Tháng, Tiền> để dễ xử lý
+        Map<Integer, Long> revenueMap = new HashMap<>();
+        long totalYearRevenue = 0;
+
+        for (Object[] row : rawData) {
+            int month = (int) row[0];
+            long amount = (long) row[1];
+            revenueMap.put(month, amount);
+            totalYearRevenue += amount; // Cộng dồn tổng cả năm
+        }
+
+        // 3. Chuẩn bị dữ liệu để fill vào Word
+        Map<String, String> dataMapping = new HashMap<>();
+        dataMapping.put("{{year}}", String.valueOf(year));
+        dataMapping.put("{{total_txn}}", (totalTxn != null ? totalTxn : 0) + "");
+        dataMapping.put("{{total_year}}", CURRENCY_FORMATTER.format(totalYearRevenue));
+        dataMapping.put("{{creator_name}}", creatorName);
+
+        // 4. Xử lý chi tiết 12 tháng (quan trọng)
+        // Loop từ tháng 1 đến 12, nếu tháng nào không có trong Map thì điền "0"
+        for (int i = 1; i <= 12; i++) {
+            long monthRevenue = revenueMap.getOrDefault(i, 0L);
+            // Key trong file word là {{m1}}, {{m2}}, ... {{m12}}
+            dataMapping.put("{{m" + i + "}}", CURRENCY_FORMATTER.format(monthRevenue));
+        }
+
+        // 5. Đọc file Template và Thay thế
+        ClassPathResource resource = new ClassPathResource("templates/report_yearly_template.docx");
+
+        try (InputStream is = resource.getInputStream();
+                XWPFDocument document = new XWPFDocument(is);
+                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            // Thay thế trong các đoạn văn (Tiêu đề, tổng kết, chữ ký...)
+            for (XWPFParagraph paragraph : document.getParagraphs()) {
+                replaceTextInParagraph(paragraph, dataMapping);
+            }
+
+            // Thay thế trong Bảng (Để điền số tiền vào 12 dòng tháng)
+            for (XWPFTable table : document.getTables()) {
+                for (XWPFTableRow row : table.getRows()) {
+                    for (XWPFTableCell cell : row.getTableCells()) {
+                        for (XWPFParagraph p : cell.getParagraphs()) {
+                            replaceTextInParagraph(p, dataMapping);
+                        }
+                    }
+                }
+            }
+
+            document.write(out);
+            return new ByteArrayInputStream(out.toByteArray());
+        }
+    }
+
 }

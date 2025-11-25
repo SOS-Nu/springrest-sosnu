@@ -2,6 +2,7 @@ package vn.hoidanit.jobhunter.config;
 
 import java.util.ArrayList;
 import java.util.List;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -163,6 +164,12 @@ public class DatabaseInitializer implements CommandLineRunner {
 
             // payment
             arr.add(new Permission("Update Success Payment", "/api/v1/payment/allhistory", "PUT", "PAYMENT"));
+            arr.add(new Permission("Export excel Payment", "/api/v1/payment/export/excel", "GET", "PAYMENT"));
+            arr.add(new Permission("export word month Payment", "/api/v1/payment/export/monthly-report", "GET",
+                    "PAYMENT"));
+            arr.add(new Permission("export word year Payment", "/api/v1/payment/export/yearly-report", "GET",
+                    "PAYMENT"));
+
             arr.add(new Permission("Get payment by id", "/api/v1/payment/allhistory/{id}", "GET", "PAYMENT"));
             arr.add(new Permission("Get payment with pagination", "/api/v1/payment/allhistory", "GET", "PAYMENT"));
 

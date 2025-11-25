@@ -219,6 +219,8 @@ public class PaymentController {
         List<PaymentHistoryDTO> history = paymentHistoryRepository.findByUser(user)
                 .stream()
                 .map(ph -> new PaymentHistoryDTO(
+                        ph.getId(),
+                        ph.getUser().getEmail(),
                         ph.getUser().getId(),
                         ph.getAmount(),
                         ph.getOrderId(),
@@ -248,6 +250,8 @@ public class PaymentController {
         List<PaymentHistoryDTO> history = paymentPage.getContent()
                 .stream()
                 .map(ph -> new PaymentHistoryDTO(
+                        ph.getId(),
+                        ph.getUser().getEmail(),
                         ph.getUser().getId(),
                         ph.getAmount(),
                         ph.getOrderId(),
@@ -284,6 +288,8 @@ public class PaymentController {
         PaymentHistory paymentHistory = paymentHistoryRepository.findById(id)
                 .orElseThrow(() -> new IdInvalidException("Payment history với ID " + id + " không tồn tại"));
         PaymentHistoryDTO dto = new PaymentHistoryDTO(
+                paymentHistory.getId(),
+                paymentHistory.getUser().getEmail(),
                 paymentHistory.getUser().getId(),
                 paymentHistory.getAmount(),
                 paymentHistory.getOrderId(),
@@ -320,6 +326,8 @@ public class PaymentController {
         paymentHistoryRepository.save(paymentHistory);
 
         PaymentHistoryDTO dto = new PaymentHistoryDTO(
+                paymentHistory.getId(),
+                paymentHistory.getUser().getEmail(),
                 paymentHistory.getUser().getId(),
                 paymentHistory.getAmount(),
                 paymentHistory.getOrderId(),
@@ -398,6 +406,27 @@ public class PaymentController {
         // 3. Trả về file
         InputStreamResource file = new InputStreamResource(in);
         String filename = "Bao_Cao_Thang_" + month + "_" + year + ".docx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType
+                        .parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .body(file);
+    }
+
+    @GetMapping("/payment/export/yearly-report")
+    @ApiMessage("Export yearly revenue report")
+    public ResponseEntity<Resource> exportYearlyReport(
+            @RequestParam("year") int year) throws IOException, IdInvalidException {
+
+        String email = SecurityUtil.getCurrentUserLogin().orElseThrow(
+                () -> new IdInvalidException("Bạn cần đăng nhập"));
+
+        // Gọi hàm exportByYear
+        ByteArrayInputStream in = paymentExportService.exportReportByYear(year, email);
+
+        InputStreamResource file = new InputStreamResource(in);
+        String filename = "Bao_Cao_Nam_" + year + ".docx";
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)

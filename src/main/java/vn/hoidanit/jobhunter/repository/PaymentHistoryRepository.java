@@ -26,4 +26,19 @@ public interface PaymentHistoryRepository
     @Query("SELECT COUNT(p) FROM PaymentHistory p WHERE p.status = 'SUCCESS' AND MONTH(p.createdAt) = :month AND YEAR(p.createdAt) = :year")
     Long countSuccessTransactions(@Param("month") int month, @Param("year") int year);
 
+    @Query("SELECT SUM(p.amount) FROM PaymentHistory p WHERE p.status = 'SUCCESS' AND YEAR(p.createdAt) = :year")
+    Long getTotalRevenueByYear(@Param("year") int year);
+
+    // 2. Tổng số giao dịch theo Năm
+    @Query("SELECT COUNT(p) FROM PaymentHistory p WHERE p.status = 'SUCCESS' AND YEAR(p.createdAt) = :year")
+    Long countSuccessTransactionsByYear(@Param("year") int year);
+
+    // 2. Lấy doanh thu GROUP BY theo tháng
+    // Kết quả trả về List<Object[]>: [Tháng (int), Tổng tiền (Long)]
+    @Query("SELECT MONTH(p.createdAt), SUM(p.amount) " +
+            "FROM PaymentHistory p " +
+            "WHERE p.status = 'SUCCESS' AND YEAR(p.createdAt) = :year " +
+            "GROUP BY MONTH(p.createdAt)")
+    List<Object[]> getMonthlyRevenueByYear(@Param("year") int year);
+
 }
