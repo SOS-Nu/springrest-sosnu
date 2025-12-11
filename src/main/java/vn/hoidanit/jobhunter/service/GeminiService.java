@@ -501,7 +501,7 @@ public class GeminiService {
             }
 
             // CHUNK_SIZE nên để 50 như đã bàn ở câu trước để nhanh hơn
-            int endIndex = Math.min(startIndex + 50, state.getPotentialJobIds().size());
+            int endIndex = Math.min(startIndex + CHUNK_SIZE, state.getPotentialJobIds().size());
 
             List<Long> currentChunkIds = state.getPotentialJobIds().subList(startIndex, endIndex);
             List<Job> jobsToProcess = jobRepository.findAllById(currentChunkIds);
@@ -520,7 +520,7 @@ public class GeminiService {
                 for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
                     Job jobDetail = jobMap.get(rankedJob.getJobId());
                     // Chỉ cần job tồn tại và điểm > 0 (hoặc ngưỡng thấp hơn như 40 để lọc rác)
-                    if (jobDetail != null && rankedJob.getScore() > 0) {
+                    if (jobDetail != null && rankedJob.getScore() > 10) {
                         ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
                         state.getFoundJobs().add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
                     }
