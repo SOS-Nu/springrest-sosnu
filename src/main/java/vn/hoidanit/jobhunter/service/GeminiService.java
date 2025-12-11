@@ -57,14 +57,14 @@ import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 public class GeminiService {
     private static final int CANDIDATE_CHUNK_SIZE = 50;
 
-    private static final int CHUNK_SIZE = 200;
+    private static final int CHUNK_SIZE = 50;
 
-    private static final String GEMINI_MODEL = "gemini-2.5-flash";
+    private static final String GEMINI_MODEL = "gemini-2.0-flash";
 
     private static final GenerateContentConfig FAST_JSON_CONFIG = GenerateContentConfig.builder()
             .temperature(0.2f)
             .topP(0.95f)
-            .maxOutputTokens(20000)
+            .maxOutputTokens(8000)
             .responseMimeType("application/json")
             .build();
 
@@ -488,46 +488,54 @@ public class GeminiService {
     }
 
     // <<< PHƯƠNG THỨC CỐT LÕI MỚI: Xử lý các cụm Job >>>
+    // <<< PHƯƠNG THỨC CỐT LÕI ĐÃ SỬA: Xử lý các cụm Job >>>
     private void processJobChunks(SearchState state, int targetFoundSize, String skillsDescription, String cvText) {
         // Tiếp tục xử lý chừng nào chưa đủ kết quả VÀ vẫn còn job tiềm năng
         while (state.getFoundJobs().size() < targetFoundSize && !state.isFullyProcessed()) {
             int startIndex = state.getLastProcessedIndex();
+
+            // Nếu đã duyệt hết danh sách tiềm năng thì dừng
             if (startIndex >= state.getPotentialJobIds().size()) {
-                state.setFullyProcessed(true); // Đánh dấu đã xử lý hết
+                state.setFullyProcessed(true);
                 break;
             }
 
-            int endIndex = Math.min(startIndex + CHUNK_SIZE, state.getPotentialJobIds().size());
+            // CHUNK_SIZE nên để 50 như đã bàn ở câu trước để nhanh hơn
+            int endIndex = Math.min(startIndex + 50, state.getPotentialJobIds().size());
 
             List<Long> currentChunkIds = state.getPotentialJobIds().subList(startIndex, endIndex);
             List<Job> jobsToProcess = jobRepository.findAllById(currentChunkIds);
 
             if (!jobsToProcess.isEmpty()) {
-                // Gọi AI để chấm điểm cho cụm này.
-                // Gemini đã trả về danh sách được sắp xếp cho cụm này.
+                // Gọi AI để chấm điểm
                 List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(skillsDescription, cvText,
                         jobsToProcess);
 
                 Map<Long, Job> jobMap = jobsToProcess.stream()
                         .collect(Collectors.toMap(Job::getId, Function.identity()));
 
+                // <<< FIX QUAN TRỌNG: BỎ ĐIỀU KIỆN IF SCORE >= 70 >>>
+                // Thay vào đó, chấp nhận mọi kết quả AI trả về (thường là > 0)
+                // Việc sắp xếp cao xuống thấp đã được AI làm, hoặc Client sẽ sort.
                 for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
-                    if (rankedJob.getScore() >= 70) {
-                        Job jobDetail = jobMap.get(rankedJob.getJobId());
-                        if (jobDetail != null) {
-                            ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
-                            // Chỉ cần thêm vào cuối danh sách
-                            state.getFoundJobs().add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
-                        }
+                    Job jobDetail = jobMap.get(rankedJob.getJobId());
+                    // Chỉ cần job tồn tại và điểm > 0 (hoặc ngưỡng thấp hơn như 40 để lọc rác)
+                    if (jobDetail != null && rankedJob.getScore() > 0) {
+                        ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
+                        state.getFoundJobs().add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
                     }
                 }
-
-                // <<< XÓA DÒNG NÀY >>>
-                // state.getFoundJobs().sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
             }
 
             // Cập nhật lại con trỏ vị trí đã xử lý
             state.setLastProcessedIndex(endIndex);
+
+            // <<< FIX THÊM: BREAK SỚM NẾU ĐÃ TÌM THẤY ÍT NHẤT 1 LƯỢNG KẾT QUẢ KHÁ >>>
+            // Để tránh việc lặp quá nhiều nếu chunk đầu tiên trả về ít kết quả nhưng vẫn
+            // chấp nhận được.
+            // Ví dụ: Nếu đã tìm được > 20 jobs thì dù chưa đủ targetSize (nếu target lớn)
+            // cũng có thể dừng tạm
+            // để trả về cho người dùng xem trước. (Tuỳ chọn)
         }
     }
 
@@ -633,7 +641,8 @@ public class GeminiService {
      */
     private List<GeminiJobScoreResponse> rankJobsWithGemini(String skillsDescription, String cvText, List<Job> jobs) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("You are an expert career advisor. Evaluate these jobs for the candidate.\n");
+        // Thay đổi role để AI cởi mở hơn
+        prompt.append("You are a helpful career assistant. Match these jobs to the candidate.\n");
 
         boolean hasCvText = (cvText != null && !cvText.trim().isEmpty());
         if (hasCvText) {
@@ -644,15 +653,22 @@ public class GeminiService {
         }
 
         try {
-            String jobsJson = convertJobsToJson(jobs); // Dùng lại hàm helper cũ
+            // Lưu ý: Dùng hàm convertJobsToJson đã tối ưu (cắt description) ở câu trả lời
+            // trước
+            String jobsJson = convertJobsToJson(jobs);
             prompt.append("\nJobs to evaluate (JSON):\n").append(jobsJson);
         } catch (Exception e) {
             log.error("Error converting jobs to JSON", e);
             return Collections.emptyList();
         }
 
+        // <<< FIX PROMPT: Rõ ràng hơn về output >>>
+        prompt.append("\n\nAnalyze strict matching based on Skills and Job Title. ");
+        prompt.append("Score from 0 to 100. ");
+        prompt.append("Return a JSON array: [{\"jobId\": number, \"score\": number}]. ");
+        // Quan trọng: Yêu cầu trả về hết, không tự ý lọc
         prompt.append(
-                "\n\nReturn a JSON array: [{\"jobId\": number, \"score\": number}]. Rank high to low. Exclude 0 score.");
+                "Include ALL jobs provided in the input, unless completely irrelevant (score 0). Sort by score DESC.");
 
         return callGeminiAndParseList(prompt.toString(), GeminiJobScoreResponse.class);
     }

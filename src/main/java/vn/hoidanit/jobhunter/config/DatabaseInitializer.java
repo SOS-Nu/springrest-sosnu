@@ -177,7 +177,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             arr.add(new Permission("Upload a file", "/api/v1/files", "GET", "FILES"));
 
             arr.add(new Permission("get candidate users for recruiter", "/api/v1/gemini/initiate-candidate-search",
-                    "GET", "SearchUsersAI"));
+                    "POST", "SearchUsersAI"));
             arr.add(new Permission("get candidate users for recruiter pagination",
                     "/api/v1/gemini/candidate-search-results", "GET", "SearchUsersAI"));
 
@@ -215,12 +215,14 @@ public class DatabaseInitializer implements CommandLineRunner {
             user.setName("USER");
             user.setDescription("user default");
             user.setActive(true);
+            this.roleRepository.save(user);
 
             // user vip
             Role userVip = new Role();
             userVip.setName("USER_VIP");
             userVip.setDescription("user Vip");
             userVip.setActive(true);
+            this.roleRepository.save(userVip);
         }
 
         if (countUsers == 0) {
