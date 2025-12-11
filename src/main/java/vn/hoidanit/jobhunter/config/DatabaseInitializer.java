@@ -209,6 +209,18 @@ public class DatabaseInitializer implements CommandLineRunner {
             employerPermissions.add(permissionRepository.findByName("Get jobs with pagination"));
             employerRole.setPermissions(employerPermissions);
             this.roleRepository.save(employerRole);
+
+            // role user
+            Role user = new Role();
+            user.setName("USER");
+            user.setDescription("user default");
+            user.setActive(true);
+
+            // user vip
+            Role userVip = new Role();
+            userVip.setName("USER_VIP");
+            userVip.setDescription("user Vip");
+            userVip.setActive(true);
         }
 
         if (countUsers == 0) {

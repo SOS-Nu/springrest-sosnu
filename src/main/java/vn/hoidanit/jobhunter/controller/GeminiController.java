@@ -33,30 +33,6 @@ public class GeminiController {
         this.fileService = fileService;
     }
 
-    // @PostMapping("/find-candidates")
-    // @ApiMessage("Tìm ứng viên phù hợp bằng Gemini")
-    // public ResponseEntity<ResFindCandidatesDTO> findCandidates(
-    // @RequestParam(name = "jobDescription", required = false) String
-    // jobDescription,
-    // @RequestParam(name = "file", required = false) MultipartFile file) throws
-    // IdInvalidException, IOException {
-    //
-    // String finalJobDescription = jobDescription;
-    //
-    // if (file != null && !file.isEmpty()) {
-    // finalJobDescription = fileService.extractTextFromFile(file);
-    // }
-    //
-    // if (finalJobDescription == null || finalJobDescription.trim().isEmpty()) {
-    // throw new IdInvalidException("Vui lòng cung cấp mô tả công việc bằng văn bản
-    // hoặc file.");
-    // }
-    //
-    // ResFindCandidatesDTO result =
-    // geminiService.findCandidates(finalJobDescription);
-    // return ResponseEntity.ok(result);
-    // }
-
     // ================= START: API TÌM KIẾM ỨNG VIÊN MỚI =================
 
     @PostMapping("/initiate-candidate-search")
@@ -102,33 +78,6 @@ public class GeminiController {
     }
 
     // ================= END: API TÌM KIẾM ỨNG VIÊN MỚI =================
-
-    // @PostMapping("/find-jobs")
-    // @ApiMessage("Tìm công việc phù hợp dựa trên CV hoặc kỹ năng")
-    // public ResponseEntity<ResFindJobsDTO> findJobs(
-    // @RequestParam(name = "skillsDescription", required = false) String
-    // skillsDescription,
-    // @RequestParam(name = "file", required = false) MultipartFile file,
-    // Pageable pageable) throws IdInvalidException, IOException { // <= THÊM
-    // PAGEABLE
-    //
-    // byte[] cvFileBytes = (file != null && !file.isEmpty()) ? file.getBytes() :
-    // null;
-    // String cvFileName = (file != null && !file.isEmpty()) ?
-    // file.getOriginalFilename() : null;
-    //
-    // if ((skillsDescription == null || skillsDescription.trim().isEmpty()) &&
-    // cvFileBytes == null) {
-    // throw new IdInvalidException("Vui lòng cung cấp mô tả kỹ năng hoặc tải lên
-    // file CV.");
-    // }
-    //
-    // // Truyền pageable vào service
-    // ResFindJobsDTO result = geminiService.findJobsForCandidate(skillsDescription,
-    // cvFileBytes, cvFileName,
-    // pageable);
-    // return ResponseEntity.ok(result);
-    // }
 
     @PostMapping("/initiate-search")
     @ApiMessage("Bước 1: Khởi tạo tìm kiếm việc làm và nhận trang đầu tiên")

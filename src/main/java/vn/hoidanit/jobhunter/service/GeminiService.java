@@ -57,14 +57,14 @@ import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 public class GeminiService {
     private static final int CANDIDATE_CHUNK_SIZE = 50;
 
-    private static final int CHUNK_SIZE = 50;
+    private static final int CHUNK_SIZE = 200;
 
-    private static final String GEMINI_MODEL = "gemini-2.0-flash";
+    private static final String GEMINI_MODEL = "gemini-2.5-flash";
 
     private static final GenerateContentConfig FAST_JSON_CONFIG = GenerateContentConfig.builder()
             .temperature(0.2f)
             .topP(0.95f)
-            .maxOutputTokens(8192)
+            .maxOutputTokens(20000)
             .responseMimeType("application/json")
             .build();
 
@@ -98,6 +98,7 @@ public class GeminiService {
     }
     // ================= START: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================
 
+    // #region Find Candidate Users
     /**
      * Khởi tạo một phiên tìm kiếm ứng viên mới.
      * Xử lý TOÀN BỘ ứng viên tiềm năng, gọi AI, sắp xếp, và lưu vào cache.
@@ -277,8 +278,9 @@ public class GeminiService {
         return meta;
     }
 
-    // ================= END: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================
+    // #endregion
 
+    // #region find user gemini
     /**
      * ĐÃ CẬP NHẬT: Gửi nội dung text của CV thay vì file base64
      */
@@ -340,6 +342,38 @@ public class GeminiService {
         return callGeminiAndParseList(promptBuilder.toString(), GeminiScoreResponse.class);
     }
 
+    /**
+     * Helper method để lọc sơ bộ các job đang active bằng FTS và tìm theo skill.
+     */
+    private List<Job> preFilterActiveJobs(Set<String> keywords, int limit) {
+        if (keywords.isEmpty()) {
+            // Nếu không có keyword, lấy các jobs active mới nhất
+            return jobRepository.findAll(
+                    (root, query, cb) -> cb.isTrue(root.get("active")),
+                    PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
+        }
+
+        String keywordString = String.join(" ", keywords);
+
+        // 1. Lấy kết quả từ Full-Text Search (đã có điều kiện active=true)
+        List<Job> ftsResults = jobRepository.searchActiveByKeywordsNative(keywordString, limit);
+
+        // 2. Lấy kết quả từ tìm kiếm Skill (đã có điều kiện active=true)
+        List<Job> skillResults = jobRepository.findActiveBySkillNames(keywords);
+
+        // 3. Gộp kết quả và loại bỏ trùng lặp
+        // Dùng LinkedHashMap để giữ thứ tự ưu tiên của FTS và loại bỏ trùng lặp
+        Map<Long, Job> combinedResults = new LinkedHashMap<>();
+        ftsResults.forEach(job -> combinedResults.put(job.getId(), job));
+        skillResults.forEach(job -> combinedResults.putIfAbsent(job.getId(), job));
+
+        return combinedResults.values().stream().limit(limit).collect(Collectors.toList());
+    }
+
+    // #endregion
+
+    // ================= END: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================
+
     // Helper class để parse response từ Gemini
     @Getter
     @Setter
@@ -375,44 +409,6 @@ public class GeminiService {
      * PHƯƠNG THỨC NÀY LÀ CỐT LÕI CỦA YÊU CẦU
      * Nó nhận bytes, chuyển sang text và gửi cho Gemini.
      */
-    public int scoreCvAgainstJob(Job job, byte[] cvFileBytes, String cvFileName) {
-        String jobDetails = String.format("Job Title: %s\nLocation: %s\nLevel: %s\nDescription: %s",
-                job.getName(), job.getLocation(), job.getLevel(), job.getDescription());
-
-        String cvText;
-        try {
-            cvText = fileService.extractTextFromBytes(cvFileBytes);
-        } catch (IOException e) {
-            log.error("Error extracting text from CV bytes: {}", e.getMessage());
-            return 0;
-        }
-
-        if (cvText == null || cvText.trim().isEmpty())
-            return 0;
-
-        String prompt = "As an expert HR, evaluate this resume against the job description. " +
-                "Return ONLY a JSON object: {\"score\": number (0-100)}. \n\n" +
-                "Job Description:\n" + jobDetails + "\n\n" +
-                "Candidate's Resume Text:\n" + cvText;
-
-        try {
-            // CẬP NHẬT Ở ĐÂY: Thêm FAST_JSON_CONFIG
-            GenerateContentResponse response = geminiClient.models.generateContent(
-                    GEMINI_MODEL,
-                    prompt,
-                    FAST_JSON_CONFIG // <--- Thay null bằng config
-            );
-
-            // Khi dùng mode JSON, đôi khi AI không trả về markdown ```json nữa
-            // nhưng vẫn nên giữ cleanJson để an toàn tuyệt đối
-            String cleanedJson = cleanJson(response.text());
-            JsonNode root = objectMapper.readTree(cleanedJson);
-            return root.path("score").asInt(0);
-        } catch (Exception e) {
-            log.error("Error calling Gemini SDK (scoreCv): {}", e.getMessage());
-            return 0;
-        }
-    }
 
     public ResInitiateSearchDTO initiateJobSearch(
             String skillsDescription, byte[] cvFileBytes, Pageable pageable)
@@ -551,34 +547,6 @@ public class GeminiService {
     }
 
     /**
-     * Helper method để lọc sơ bộ các job đang active bằng FTS và tìm theo skill.
-     */
-    private List<Job> preFilterActiveJobs(Set<String> keywords, int limit) {
-        if (keywords.isEmpty()) {
-            // Nếu không có keyword, lấy các jobs active mới nhất
-            return jobRepository.findAll(
-                    (root, query, cb) -> cb.isTrue(root.get("active")),
-                    PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
-        }
-
-        String keywordString = String.join(" ", keywords);
-
-        // 1. Lấy kết quả từ Full-Text Search (đã có điều kiện active=true)
-        List<Job> ftsResults = jobRepository.searchActiveByKeywordsNative(keywordString, limit);
-
-        // 2. Lấy kết quả từ tìm kiếm Skill (đã có điều kiện active=true)
-        List<Job> skillResults = jobRepository.findActiveBySkillNames(keywords);
-
-        // 3. Gộp kết quả và loại bỏ trùng lặp
-        // Dùng LinkedHashMap để giữ thứ tự ưu tiên của FTS và loại bỏ trùng lặp
-        Map<Long, Job> combinedResults = new LinkedHashMap<>();
-        ftsResults.forEach(job -> combinedResults.put(job.getId(), job));
-        skillResults.forEach(job -> combinedResults.putIfAbsent(job.getId(), job));
-
-        return combinedResults.values().stream().limit(limit).collect(Collectors.toList());
-    }
-
-    /**
      * Helper method để trích xuất keywords từ CV và mô tả.
      */
     /**
@@ -590,32 +558,41 @@ public class GeminiService {
             return "";
         }
 
-        // Prompt tối ưu để lấy keywords cho FTS
-        String prompt = "You are a search engine optimizer. Analyze the following text. " +
-                "Extract top 20 most important keywords including: Technical Skills, Job Titles, Locations, and Tools. "
+        // Log kiểm tra input xem có bị lỗi font từ Controller xuống không
+        System.out.println("LOG-DEBUG: Raw input for Gemini extraction: " + originalText);
+
+        // Prompt mới: "Expand" thay vì chỉ "Extract"
+        String prompt = "You are an expert technical recruiter and search engine optimizer. " +
+                "Your task is to generate a list of relevant keywords for a Full-Text Search engine based on the user input. "
                 +
-                "Ignore stop words (and, or, the, is, at...). " +
-                "Return a JSON object: {\"keywords\": \"keyword1 keyword2 keyword3 ...\"}. " +
-                "The keywords string must be space-separated suitable for Full-Text Search match." +
-                "\n\nText: " + originalText;
+                "\n\nRULES:" +
+                "\n1. Analyze the input text: '" + originalText + "'" +
+                "\n2. If the input is a Job Description or Resume (long text): Extract top 20 most important technical skills, job titles, and tools."
+                +
+                "\n3. **CRITICAL**: If the input is SHORT (e.g., 'Kỹ sư AI', 'Java Dev', 'Marketing'): " +
+                "   You MUST EXPAND it by generating synonyms, related technical skills, and English translations. " +
+                "   (Example: Input 'Kỹ sư AI' -> Output: 'Artificial Intelligence Machine Learning Deep Learning Python NLP Data Scientist Computer Vision django Data Science,....')."
+                +
+                "\n4. Remove stop words (and, or, the, at, ...). Output must be a single space-separated string." +
+                "\n5. Return ONLY a JSON object: {\"keywords\": \"keyword1 keyword2 ...\"}." +
+                "\n\nResponse:";
 
         try {
-            // Sử dụng cấu hình Fast Json đã tạo ở bước trước
+            // Dùng FAST_JSON_CONFIG để trả về nhanh
             GenerateContentResponse response = geminiClient.models.generateContent(
                     GEMINI_MODEL,
                     prompt,
-                    FAST_JSON_CONFIG // Hàm config tối ưu tốc độ
-            );
+                    FAST_JSON_CONFIG);
 
             String cleanedJson = cleanJson(response.text());
             KeywordResponse res = objectMapper.readValue(cleanedJson, KeywordResponse.class);
 
-            log.info(">>> Extracted Keywords: {}", res.getKeywords());
+            log.info(">>> Gemini Expanded Keywords: {}", res.getKeywords());
             return res.getKeywords();
         } catch (Exception e) {
             log.error("Error extracting keywords with AI: {}", e.getMessage());
-            // Fallback: Nếu AI lỗi, dùng lại hàm regex cũ để hệ thống không chết
-            return String.join(" ", extractKeywords("", originalText));
+            // Fallback: Nếu AI lỗi, trả về nguyên gốc (đã chuẩn hóa)
+            return originalText;
         }
     }
 
@@ -850,6 +827,45 @@ public class GeminiService {
                 + jobsJson
                 + "\n\n---"
                 + "\n**RESPONSE (valid JSON object only, no extra text or markdown):**";
+    }
+
+    public int scoreCvAgainstJob(Job job, byte[] cvFileBytes, String cvFileName) {
+        String jobDetails = String.format("Job Title: %s\nLocation: %s\nLevel: %s\nDescription: %s",
+                job.getName(), job.getLocation(), job.getLevel(), job.getDescription());
+
+        String cvText;
+        try {
+            cvText = fileService.extractTextFromBytes(cvFileBytes);
+        } catch (IOException e) {
+            log.error("Error extracting text from CV bytes: {}", e.getMessage());
+            return 0;
+        }
+
+        if (cvText == null || cvText.trim().isEmpty())
+            return 0;
+
+        String prompt = "As an expert HR, evaluate this resume against the job description. " +
+                "Return ONLY a JSON object: {\"score\": number (0-100)}. \n\n" +
+                "Job Description:\n" + jobDetails + "\n\n" +
+                "Candidate's Resume Text:\n" + cvText;
+
+        try {
+            // CẬP NHẬT Ở ĐÂY: Thêm FAST_JSON_CONFIG
+            GenerateContentResponse response = geminiClient.models.generateContent(
+                    GEMINI_MODEL,
+                    prompt,
+                    FAST_JSON_CONFIG // <--- Thay null bằng config
+            );
+
+            // Khi dùng mode JSON, đôi khi AI không trả về markdown ```json nữa
+            // nhưng vẫn nên giữ cleanJson để an toàn tuyệt đối
+            String cleanedJson = cleanJson(response.text());
+            JsonNode root = objectMapper.readTree(cleanedJson);
+            return root.path("score").asInt(0);
+        } catch (Exception e) {
+            log.error("Error calling Gemini SDK (scoreCv): {}", e.getMessage());
+            return 0;
+        }
     }
 
     // Helper class để parse response

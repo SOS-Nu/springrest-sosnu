@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,11 +33,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.servlet.http.HttpServletRequest;
-import vn.hoidanit.jobhunter.config.CacheConfig;
 import vn.hoidanit.jobhunter.domain.entity.ChatMessage;
 import vn.hoidanit.jobhunter.domain.entity.ChatRoom;
 import vn.hoidanit.jobhunter.domain.entity.Company;
-import vn.hoidanit.jobhunter.domain.entity.OnlineResume;
 import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.entity.UserBulkCreateDTO;
@@ -58,7 +55,6 @@ import vn.hoidanit.jobhunter.repository.RoleRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.repository.UserSessionRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
-import vn.hoidanit.jobhunter.util.constant.GenderEnum;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 import vn.hoidanit.jobhunter.util.error.SessionLimitExceededException;
@@ -707,7 +703,7 @@ public class UserService {
             userRepository.save(user);
         }
 
-        int maxSubmissions = user.isVip() ? 3 : 1;
+        int maxSubmissions = user.isVip() ? 10 : 5;
         return user.getCvSubmissionCount() < maxSubmissions;
     }
 
