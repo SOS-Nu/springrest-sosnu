@@ -71,6 +71,10 @@ dependencies {
     implementation("com.bucket4j:bucket4j_jdk17-redis-common:8.14.0")
     implementation("com.bucket4j:bucket4j_jdk17-lettuce:8.14.0")
 
+	//gemini
+	implementation("com.google.genai:google-genai:0.2.0")
+	implementation("com.google.genai:google-genai:0.4.0")
+
 
 
 }

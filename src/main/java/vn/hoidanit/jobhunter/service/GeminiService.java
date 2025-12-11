@@ -1,25 +1,38 @@
 package vn.hoidanit.jobhunter.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.Getter;
-import lombok.Setter;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.genai.Client;
+import com.google.genai.types.GenerateContentConfig;
+import com.google.genai.types.GenerateContentResponse;
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.response.ResCandidateWithScoreDTO;
@@ -39,20 +52,23 @@ import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-
 @Service
+@Slf4j
 public class GeminiService {
     private static final int CANDIDATE_CHUNK_SIZE = 50;
 
-    private static final int CHUNK_SIZE = 100;
+    private static final int CHUNK_SIZE = 50;
 
-    // ... (Giữ nguyên các biến và constructor)
+    private static final String GEMINI_MODEL = "gemini-2.0-flash";
+
+    private static final GenerateContentConfig FAST_JSON_CONFIG = GenerateContentConfig.builder()
+            .temperature(0.2f)
+            .topP(0.95f)
+            .maxOutputTokens(8192)
+            .responseMimeType("application/json")
+            .build();
+
+    private final Client geminiClient;
     private final RestTemplate restTemplate;
     private final UserService userService;
     private final FileService fileService;
@@ -69,7 +85,7 @@ public class GeminiService {
 
     public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService,
             ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService, CacheManager cacheManager,
-            UserRepository userRepository) {
+            UserRepository userRepository, Client geminiClient) {
         this.restTemplate = restTemplate;
         this.userService = userService;
         this.fileService = fileService;
@@ -78,56 +94,8 @@ public class GeminiService {
         this.jobService = jobService;
         this.userRepository = userRepository;
         this.cacheManager = cacheManager;
+        this.geminiClient = geminiClient;
     }
-
-    // public ResFindCandidatesDTO findCandidates(String jobDescription) throws
-    // IdInvalidException {
-    // List<ResCandidateWithScoreDTO> suitableCandidates = new ArrayList<>();
-    // ResultPaginationDTO.Meta lastMeta = null;
-    // int currentPage = 0;
-    // final int PAGE_SIZE = 200;
-    // final int TARGET_CANDIDATES = 10;
-    //
-    // while (suitableCandidates.size() < TARGET_CANDIDATES) {
-    // Pageable pageable = PageRequest.of(currentPage, PAGE_SIZE);
-    // ResultPaginationDTO paginatedUsers = userService.fetchAllUserDetails(null,
-    // pageable);
-    // lastMeta = paginatedUsers.getMeta();
-    //
-    // @SuppressWarnings("unchecked")
-    // List<ResUserDetailDTO> currentUsers = (List<ResUserDetailDTO>)
-    // paginatedUsers.getResult();
-    // if (currentUsers.isEmpty()) {
-    // break; // Hết người dùng để kiểm tra
-    // }
-    //
-    // // Chuyển danh sách thành Map để tra cứu nhanh hơn
-    // Map<Long, ResUserDetailDTO> userMap = currentUsers.stream()
-    // .collect(Collectors.toMap(ResUserDetailDTO::getId, Function.identity()));
-    //
-    // List<GeminiScoreResponse> rankedUsers = rankUsersWithGemini(jobDescription,
-    // currentUsers);
-    //
-    // for (GeminiScoreResponse rankedUser : rankedUsers) {
-    // if (suitableCandidates.size() >= TARGET_CANDIDATES)
-    // break;
-    //
-    // ResUserDetailDTO userDetail = userMap.get(rankedUser.getUserId());
-    // if (userDetail != null) {
-    // suitableCandidates.add(new ResCandidateWithScoreDTO(rankedUser.getScore(),
-    // userDetail));
-    // }
-    // }
-    //
-    // currentPage++;
-    // }
-    //
-    // // Sắp xếp danh sách cuối cùng theo điểm số giảm dần
-    // suitableCandidates.sort(Comparator.comparingInt(ResCandidateWithScoreDTO::getScore).reversed());
-    //
-    // return new ResFindCandidatesDTO(suitableCandidates, lastMeta);
-    // }
-
     // ================= START: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================
 
     /**
@@ -138,20 +106,12 @@ public class GeminiService {
     public ResInitiateCandidateSearchDTO initiateCandidateSearch(String jobDescription, Pageable pageable)
             throws IdInvalidException {
         System.out.println("LOG: >>> [START] Initiating new ON-DEMAND candidate search...");
+        String keywords = extractKeywordsWithGemini(jobDescription);
 
         // <<< LOG MỚI >>>
         // Log này để kiểm tra nội dung text thô nhận được từ controller.
         System.out.println("LOG-DEBUG: Received raw job description text (length: "
                 + (jobDescription != null ? jobDescription.length() : 0) + ")");
-
-        Set<String> keywordsSet = extractKeywords("", jobDescription);
-
-        // <<< LOG MỚI >>>
-        // Log này cực kỳ quan trọng, nó cho biết bộ từ khóa cuối cùng được tạo ra là
-        // gì.
-        System.out.println("LOG-DEBUG: Extracted keywords set: " + keywordsSet);
-
-        String keywords = String.join(" ", keywordsSet);
 
         // <<< LOG MỚI >>>
         // Log này cho thấy chuỗi cuối cùng được truyền vào câu lệnh FTS. Nếu nó rỗng,
@@ -323,101 +283,61 @@ public class GeminiService {
      * ĐÃ CẬP NHẬT: Gửi nội dung text của CV thay vì file base64
      */
     private List<GeminiScoreResponse> rankUsersWithGemini(String jobDescription, List<ResUserDetailDTO> users) {
-        System.out.println("LOG: --- Calling Gemini API to rank " + users.size() + " users ---");
-        List<Map<String, Object>> parts = new ArrayList<>();
+        log.info(">>> Calling Gemini SDK to rank {} users", users.size());
 
-        String initialPrompt = "You are an expert HR assistant. Based on the following job description, please analyze each candidate. "
-                + "Each candidate's information is provided as a combination of structured JSON data and their combined resume text (if available). "
-                + "Prioritize the information in the combined resume text. "
-                + "\n\nJob Description:\n\"" + jobDescription + "\"\n\n";
-        parts.add(Map.of("text", initialPrompt));
+        StringBuilder promptBuilder = new StringBuilder();
+        promptBuilder.append(
+                "You are an expert HR assistant. Based on the following job description, analyze each candidate. ");
+        promptBuilder.append("Prioritize the resume text. \n\n");
+        promptBuilder.append("Job Description:\n\"").append(jobDescription).append("\"\n\n");
 
         for (ResUserDetailDTO userDetail : users) {
             try {
-                // Lấy User entity đầy đủ để truy cập OnlineResume và MainResume
                 User userEntity = this.userService.fetchUserById(userDetail.getId());
                 if (userEntity == null)
                     continue;
 
-                System.out.println("LOG:   - Preparing data for User ID: " + userEntity.getId());
-
                 StringBuilder combinedResumeText = new StringBuilder();
 
-                // 1. Xử lý OnlineResume
+                // 1. Online Resume
                 if (userEntity.getOnlineResume() != null) {
-                    String onlineResumeText = buildTextFromOnlineResume(userEntity);
-                    if (!onlineResumeText.isEmpty()) {
-                        combinedResumeText.append("--- ONLINE RESUME ---\n");
-                        combinedResumeText.append(onlineResumeText).append("\n\n");
-                        System.out.println("LOG:     + Added Online Resume text.");
-                    }
+                    combinedResumeText.append("--- ONLINE RESUME ---\n")
+                            .append(buildTextFromOnlineResume(userEntity)).append("\n\n");
                 }
 
-                // 2. Xử lý MainResume (file)
+                // 2. Main Resume (File)
                 String mainResumeFileName = userEntity.getMainResume();
                 if (mainResumeFileName != null && !mainResumeFileName.isEmpty()) {
                     try {
                         String fileResumeText = fileService.extractTextFromStoredFile(mainResumeFileName, "resumes");
                         if (fileResumeText != null && !fileResumeText.trim().isEmpty()) {
-                            combinedResumeText.append("--- UPLOADED CV FILE ---\n");
-                            combinedResumeText.append(fileResumeText).append("\n");
-                            System.out.println("LOG:     + Added Main Resume (file) text.");
+                            combinedResumeText.append("--- UPLOADED CV FILE ---\n").append(fileResumeText).append("\n");
                         }
                     } catch (IOException | URISyntaxException e) {
-                        System.err.println("LOG-WARN: Could not extract text from file " + mainResumeFileName
-                                + " for user " + userEntity.getId() + ": " + e.getMessage());
+                        log.warn("Could not extract text from file {} for user {}: {}", mainResumeFileName,
+                                userEntity.getId(), e.getMessage());
                     }
                 }
 
-                // Chuẩn bị JSON (loại bỏ resume file name để tránh trùng lặp)
-                userDetail.setMainResume(null);
-                String userJson = objectMapper.writeValueAsString(userDetail);
-                userDetail.setMainResume(mainResumeFileName); // Gán lại
-
-                parts.add(Map.of("text", "Candidate data (JSON): " + userJson));
-
-                // Thêm phần text resume đã gộp
-                if (combinedResumeText.length() > 0) {
-                    parts.add(Map.of("text", "Candidate Combined Resume Text:\n" + combinedResumeText.toString()));
-                } else {
-                    parts.add(Map.of("text", "Candidate has no resume text available."));
-                    System.out.println("LOG:     - User " + userEntity.getId() + " has no resume text.");
-                }
+                // Append to prompt
+                promptBuilder.append("Candidate ID: ").append(userDetail.getId()).append("\n");
+                // Clone DTO to remove circular refs or unnecessary fields if needed, or just
+                // use minimal JSON
+                userDetail.setMainResume(null); // Clean for JSON
+                promptBuilder.append("Metadata: ").append(objectMapper.writeValueAsString(userDetail)).append("\n");
+                promptBuilder.append("Resume Content:\n").append(combinedResumeText).append("\n");
+                promptBuilder.append("--------------------------------------------------\n");
 
             } catch (Exception e) {
-                System.err.println(
-                        "LOG-ERROR: Error processing user data or file for user ID " + userDetail.getId() + ": "
-                                + e.getMessage());
+                log.error("Error preparing data for user ID {}: {}", userDetail.getId(), e.getMessage());
             }
         }
 
-        String finalPrompt = "\n\nAfter analyzing all candidates, return a JSON array of objects. Each object must have two keys: 'userId' (a number) and 'score' (a number from 0 to 100 representing how well they match the job description). "
-                + "Only include candidates who are a good match (score > 50). Rank the array from the highest score to the lowest. "
-                + "Response (JSON array of objects only):";
-        parts.add(Map.of("text", finalPrompt));
+        promptBuilder.append(
+                "\n\nAfter analyzing, return a JSON array. Objects must have 'userId' (number) and 'score' (0-100). ");
+        promptBuilder.append("Filter score > 50. Sort desc. Format: [{\"userId\": 1, \"score\": 90}, ...]");
 
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            Map<String, Object> content = new HashMap<>();
-            content.put("parts", parts);
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("contents", Collections.singletonList(content));
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-            String url = geminiApiUrl + "?key=" + geminiApiKey;
-            String response = restTemplate.postForObject(url, entity, String.class);
-            JsonNode root = objectMapper.readTree(response);
-            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text")
-                    .asText();
-            String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
-
-            return objectMapper.readValue(cleanedJson,
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiScoreResponse.class));
-
-        } catch (Exception e) {
-            System.err.println("Error calling Gemini API or parsing response: " + e.getMessage());
-            return Collections.emptyList();
-        }
+        return callGeminiAndParseList(promptBuilder.toString(), GeminiScoreResponse.class);
     }
 
     // Helper class để parse response từ Gemini
@@ -456,149 +376,66 @@ public class GeminiService {
      * Nó nhận bytes, chuyển sang text và gửi cho Gemini.
      */
     public int scoreCvAgainstJob(Job job, byte[] cvFileBytes, String cvFileName) {
-        String jobDetails = String.format(
-                "Job Title: %s\nLocation: %s\nLevel: %s\nDescription: %s",
+        String jobDetails = String.format("Job Title: %s\nLocation: %s\nLevel: %s\nDescription: %s",
                 job.getName(), job.getLocation(), job.getLevel(), job.getDescription());
 
-        List<Map<String, Object>> parts = new ArrayList<>();
-
-        // Sử dụng FileService để chuyển byte[] thành text
         String cvText;
         try {
             cvText = fileService.extractTextFromBytes(cvFileBytes);
         } catch (IOException e) {
-            System.err.println("Lỗi khi trích xuất text từ CV bytes: " + e.getMessage());
-            return 0; // Trả về 0 nếu không trích xuất được
-        }
-
-        if (cvText == null || cvText.trim().isEmpty()) {
-            System.err.println("Nội dung text của CV rỗng, bỏ qua chấm điểm.");
+            log.error("Error extracting text from CV bytes: {}", e.getMessage());
             return 0;
         }
 
-        // Build prompt với nội dung text
-        String promptText = "As an expert HR, please evaluate the following resume text against the job description. " +
-                "Provide a suitability score on a scale of 0 to 100. " +
-                "Return ONLY a JSON object with a single key 'score'. Example: {\"score\": 95}\n\n" +
+        if (cvText == null || cvText.trim().isEmpty())
+            return 0;
+
+        String prompt = "As an expert HR, evaluate this resume against the job description. " +
+                "Return ONLY a JSON object: {\"score\": number (0-100)}. \n\n" +
                 "Job Description:\n" + jobDetails + "\n\n" +
                 "Candidate's Resume Text:\n" + cvText;
-        parts.add(Map.of("text", promptText));
 
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            Map<String, Object> content = Map.of("parts", parts);
-            Map<String, Object> requestBody = Map.of("contents", Collections.singletonList(content));
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            // CẬP NHẬT Ở ĐÂY: Thêm FAST_JSON_CONFIG
+            GenerateContentResponse response = geminiClient.models.generateContent(
+                    GEMINI_MODEL,
+                    prompt,
+                    FAST_JSON_CONFIG // <--- Thay null bằng config
+            );
 
-            String url = geminiApiUrl + "?key=" + geminiApiKey;
-            String response = restTemplate.postForObject(url, entity, String.class);
-
-            JsonNode root = objectMapper.readTree(response);
-            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text")
-                    .asText();
-            String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
-            JsonNode scoreNode = objectMapper.readTree(cleanedJson);
-
-            return scoreNode.path("score").asInt(0);
-
+            // Khi dùng mode JSON, đôi khi AI không trả về markdown ```json nữa
+            // nhưng vẫn nên giữ cleanJson để an toàn tuyệt đối
+            String cleanedJson = cleanJson(response.text());
+            JsonNode root = objectMapper.readTree(cleanedJson);
+            return root.path("score").asInt(0);
         } catch (Exception e) {
-            System.err.println("Lỗi khi gọi Gemini API để chấm điểm: " + e.getMessage());
+            log.error("Error calling Gemini SDK (scoreCv): {}", e.getMessage());
             return 0;
         }
     }
-
-    // public ResFindJobsDTO findJobsForCandidate(
-    // String skillsDescription, byte[] cvFileBytes, String cvFileName, Pageable
-    // pageable)
-    // throws IdInvalidException, IOException {
-    //
-    // final int PRE_FILTER_LIMIT = 200;
-    //
-    // String cvText = (cvFileBytes != null) ?
-    // fileService.extractTextFromBytes(cvFileBytes) : "";
-    //
-    // // <<< THAY ĐỔI CỐT LÕI: SỬ DỤNG CACHE >>>
-    // // 1. Tạo cache key duy nhất từ nội dung CV và skills
-    // String cacheKey = "find_jobs:" + SecurityUtil.hash(cvText +
-    // skillsDescription);
-    //
-    // // 2. Lấy "ngăn" cache có tên "jobMatches"
-    // Cache cache = cacheManager.getCache("jobMatches");
-    //
-    // // 3. Thử lấy kết quả từ cache trước
-    // // Sử dụng get(key, type) để tránh phải ép kiểu thủ công
-    // List<ResJobWithScoreDTO> allRankedJobs = cache.get(cacheKey, List.class);
-    //
-    // // 4. KIỂM TRA CACHE
-    // if (allRankedJobs == null) {
-    // // ---- CACHE MISS (Không có trong cache) ----
-    // System.out.println("LOG: Cache miss! Calling AI for key: " + cacheKey);
-    //
-    // // Thực hiện logic tìm kiếm và gọi AI như cũ
-    // Set<String> keywords = extractKeywords(cvText, skillsDescription);
-    // List<Job> potentialJobs = preFilterActiveJobs(keywords, PRE_FILTER_LIMIT);
-    //
-    // if (potentialJobs.isEmpty()) {
-    // return new ResFindJobsDTO(Collections.emptyList(), new
-    // ResultPaginationDTO.Meta());
-    // }
-    //
-    // List<GeminiJobScoreResponse> rankedJobScores = rankJobsWithGemini(
-    // skillsDescription, cvText, potentialJobs);
-    //
-    // Map<Long, Job> jobMap = potentialJobs.stream()
-    // .collect(Collectors.toMap(Job::getId, Function.identity()));
-    //
-    // allRankedJobs = new ArrayList<>(); // Khởi tạo list mới
-    // for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
-    // Job jobDetail = jobMap.get(rankedJob.getJobId());
-    // if (jobDetail != null) {
-    // ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
-    // allRankedJobs.add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
-    // }
-    // }
-    //
-    // allRankedJobs.sort(Comparator.comparingInt(ResJobWithScoreDTO::getScore).reversed());
-    //
-    // // 5. LƯU KẾT QUẢ VÀO CACHE để dùng cho các lần sau
-    // cache.put(cacheKey, allRankedJobs);
-    //
-    // } else {
-    // // ---- CACHE HIT (Tìm thấy trong cache) ----
-    // System.out.println("LOG: Cache hit! Found data for key: " + cacheKey);
-    // }
-    //
-    // // === PHÂN TRANG KẾT QUẢ TRẢ VỀ (Luôn chạy, dù là cache hit hay miss) ===
-    // int start = (int) pageable.getOffset();
-    // int end = Math.min((start + pageable.getPageSize()), allRankedJobs.size());
-    //
-    // List<ResJobWithScoreDTO> paginatedResult = (start >= allRankedJobs.size())
-    // ? Collections.emptyList()
-    // : allRankedJobs.subList(start, end);
-    //
-    // // Meta giờ sẽ luôn nhất quán vì `allRankedJobs.size()` không đổi
-    // ResultPaginationDTO.Meta meta = new ResultPaginationDTO.Meta();
-    // meta.setPage(pageable.getPageNumber() + 1);
-    // meta.setPageSize(pageable.getPageSize());
-    // meta.setPages((int) Math.ceil((double) allRankedJobs.size() /
-    // pageable.getPageSize()));
-    // meta.setTotal(allRankedJobs.size());
-    //
-    // return new ResFindJobsDTO(paginatedResult, meta);
-    // }
 
     public ResInitiateSearchDTO initiateJobSearch(
             String skillsDescription, byte[] cvFileBytes, Pageable pageable)
             throws IdInvalidException, IOException {
 
         String cvText = (cvFileBytes != null) ? fileService.extractTextFromBytes(cvFileBytes) : "";
-        String cacheKey = "find_jobs:" + SecurityUtil.hash(cvText + skillsDescription);
+        String fullInputText = (cvText + " " + skillsDescription).trim();
+
+        String cacheKey = "find_jobs:" + SecurityUtil.hash(fullInputText);
         Cache cache = cacheManager.getCache("jobMatches");
 
+        // <<< THAY ĐỔI LỚN Ở ĐÂY >>>
+        // 1. Dùng AI trích xuất keyword từ CV + Skill desc
+        String keywords = extractKeywordsWithGemini(fullInputText);
+
+        // 2. Tách chuỗi keyword thành Set để dùng cho hàm preFilterActiveJobs cũ
+        // (Hoặc bạn có thể viết lại preFilterActiveJobs để nhận String keywords trực
+        // tiếp cũng được)
+        Set<String> keywordSet = new HashSet<>(Arrays.asList(keywords.split("\\s+")));
+
         final int PRE_FILTER_LIMIT = 1000;
-        Set<String> keywords = extractKeywords(cvText, skillsDescription);
-        List<Job> potentialJobs = preFilterActiveJobs(keywords, PRE_FILTER_LIMIT);
+        // 3. Gọi DB lọc
+        List<Job> potentialJobs = preFilterActiveJobs(keywordSet, PRE_FILTER_LIMIT);
         List<Long> potentialJobIds = potentialJobs.stream().map(Job::getId).collect(Collectors.toList());
 
         SearchState state = new SearchState();
@@ -744,6 +581,44 @@ public class GeminiService {
     /**
      * Helper method để trích xuất keywords từ CV và mô tả.
      */
+    /**
+     * BƯỚC 1: Dùng AI trích xuất keywords quan trọng từ văn bản thô.
+     * Mục đích: Tạo đầu vào chất lượng cao cho MySQL Full-Text Search.
+     */
+    private String extractKeywordsWithGemini(String originalText) {
+        if (originalText == null || originalText.trim().isEmpty()) {
+            return "";
+        }
+
+        // Prompt tối ưu để lấy keywords cho FTS
+        String prompt = "You are a search engine optimizer. Analyze the following text. " +
+                "Extract top 20 most important keywords including: Technical Skills, Job Titles, Locations, and Tools. "
+                +
+                "Ignore stop words (and, or, the, is, at...). " +
+                "Return a JSON object: {\"keywords\": \"keyword1 keyword2 keyword3 ...\"}. " +
+                "The keywords string must be space-separated suitable for Full-Text Search match." +
+                "\n\nText: " + originalText;
+
+        try {
+            // Sử dụng cấu hình Fast Json đã tạo ở bước trước
+            GenerateContentResponse response = geminiClient.models.generateContent(
+                    GEMINI_MODEL,
+                    prompt,
+                    FAST_JSON_CONFIG // Hàm config tối ưu tốc độ
+            );
+
+            String cleanedJson = cleanJson(response.text());
+            KeywordResponse res = objectMapper.readValue(cleanedJson, KeywordResponse.class);
+
+            log.info(">>> Extracted Keywords: {}", res.getKeywords());
+            return res.getKeywords();
+        } catch (Exception e) {
+            log.error("Error extracting keywords with AI: {}", e.getMessage());
+            // Fallback: Nếu AI lỗi, dùng lại hàm regex cũ để hệ thống không chết
+            return String.join(" ", extractKeywords("", originalText));
+        }
+    }
+
     private Set<String> extractKeywords(String cvText, String skillsDescription) {
         Set<String> keywords = new HashSet<>();
         String combinedText = (cvText != null ? cvText : "") + " "
@@ -770,135 +645,123 @@ public class GeminiService {
         return keywords;
     }
 
+    @Getter
+    @Setter
+    private static class KeywordResponse {
+        private String keywords;
+    }
+
     /**
      * ĐÃ CẬP NHẬT: Gửi thông tin ứng viên dưới dạng text thay vì file
      */
-    private List<GeminiJobScoreResponse> rankJobsWithGemini(
-            String skillsDescription, String cvText, List<Job> jobs) {
+    private List<GeminiJobScoreResponse> rankJobsWithGemini(String skillsDescription, String cvText, List<Job> jobs) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("You are an expert career advisor. Evaluate these jobs for the candidate.\n");
 
-        List<Map<String, Object>> parts = new ArrayList<>();
-
-        String initialPrompt = "You are an expert career advisor. Based on the candidate's skills and/or resume text, please evaluate the following job openings. "
-                + "Prioritize the information in the resume text if it exists.\n\n"
-                + "Candidate's Information:";
-        parts.add(Map.of("text", initialPrompt));
-
-        // <<< THAY ĐỔI 5: Đơn giản hóa logic, sử dụng trực tiếp cvText >>>
         boolean hasCvText = (cvText != null && !cvText.trim().isEmpty());
-        boolean hasSkills = (skillsDescription != null && !skillsDescription.trim().isEmpty());
-
         if (hasCvText) {
-            parts.add(Map.of("text", "Candidate Resume Text:\n" + cvText));
-            if (hasSkills) {
-                parts.add(Map.of("text", "Additional skills summary: " + skillsDescription));
-            }
-        } else if (hasSkills) {
-            parts.add(Map.of("text", skillsDescription));
+            prompt.append("Candidate Resume:\n").append(cvText).append("\n");
+        }
+        if (skillsDescription != null && !skillsDescription.trim().isEmpty()) {
+            prompt.append("Skills Summary: ").append(skillsDescription).append("\n");
         }
 
         try {
-            String jobsJson = objectMapper.writeValueAsString(
-                    jobs.stream().map(jobService::convertToResFetchJobDTO).collect(Collectors.toList()));
-            parts.add(Map.of("text", "\n\nHere are the job openings to evaluate:\n" + jobsJson));
+            String jobsJson = convertJobsToJson(jobs); // Dùng lại hàm helper cũ
+            prompt.append("\nJobs to evaluate (JSON):\n").append(jobsJson);
         } catch (Exception e) {
-            System.err.println("Error converting jobs to JSON: " + e.getMessage());
+            log.error("Error converting jobs to JSON", e);
+            return Collections.emptyList();
         }
 
-        String finalPrompt = "\n\nAfter analyzing all jobs, return a JSON array of objects. Each object must have 'jobId' and 'score' (0-100). "
-                + "Rank them from highest score to lowest. Only include jobs that are a good match and have a score greater than 0. "
-                + "Exclude jobs with a score of 0, such as those where the candidate's skills do not match the job requirements or the job location is incompatible with the candidate's preferences. "
-                + "Response (JSON array of objects only):";
-        parts.add(Map.of("text", finalPrompt));
+        prompt.append(
+                "\n\nReturn a JSON array: [{\"jobId\": number, \"score\": number}]. Rank high to low. Exclude 0 score.");
 
+        return callGeminiAndParseList(prompt.toString(), GeminiJobScoreResponse.class);
+    }
+
+    // =========================================================================
+    // HELPER METHODS (CLEAN ARCHITECTURE & REUSE)
+    // =========================================================================
+
+    /**
+     * Generic method to call Gemini and parse a JSON List response
+     */
+    private <T> List<T> callGeminiAndParseList(String prompt, Class<T> clazz) {
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(
-                    Map.of("contents", Collections.singletonList(Map.of("parts", parts))), headers);
-            String url = geminiApiUrl + "?key=" + geminiApiKey;
-            String response = restTemplate.postForObject(url, entity, String.class);
-            JsonNode root = objectMapper.readTree(response);
-            String textResponse = root.path("candidates").path(0).path("content").path("parts").path(0).path("text")
-                    .asText();
-            String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
+            // CẬP NHẬT Ở ĐÂY: Thêm FAST_JSON_CONFIG
+            GenerateContentResponse response = geminiClient.models.generateContent(
+                    GEMINI_MODEL,
+                    prompt,
+                    FAST_JSON_CONFIG // <--- Thay null bằng config
+            );
+
+            String textResponse = response.text();
+            String cleanedJson = cleanJson(textResponse);
 
             return objectMapper.readValue(cleanedJson,
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, GeminiJobScoreResponse.class));
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, clazz));
         } catch (Exception e) {
-            System.err.println("Error calling Gemini API for finding jobs: " + e.getMessage());
-            // THAY ĐỔI Ở ĐÂY
-            System.err.println("======= GEMINI API CALL FAILED (find-jobs) =======");
-            // In ra toàn bộ thông tin lỗi, bạn sẽ thấy mã lỗi như 429 ở đây
-            e.printStackTrace();
-            System.err.println("==================================================");
+            log.error("Gemini SDK Call Failed: {}", e.getMessage());
             return Collections.emptyList();
-
         }
+    }
+
+    /**
+     * Utility làm sạch chuỗi JSON trả về từ AI (thường bị bao bởi ```json ... ```)
+     */
+    private String cleanJson(String rawText) {
+        if (rawText == null)
+            return "{}";
+        String cleaned = rawText.trim();
+        if (cleaned.startsWith("```json")) {
+            cleaned = cleaned.substring(7);
+        } else if (cleaned.startsWith("```")) {
+            cleaned = cleaned.substring(3);
+        }
+        if (cleaned.endsWith("```")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 3);
+        }
+        return cleaned.trim();
     }
 
     // PHƯƠNG THỨC MỚI CỐT LÕI
     public ResCvEvaluationDTO evaluateCandidateCv(MultipartFile cvFile, String language)
             throws IdInvalidException, IOException {
-        // 1. Lấy thông tin người dùng hiện tại
         String email = SecurityUtil.getCurrentUserLogin().orElseThrow(() -> new IdInvalidException("User not found"));
         User currentUser = this.userRepository.findByEmail(email);
-        if (currentUser == null) {
-            throw new IdInvalidException("User not found with email: " + email);
-        }
 
-        // 2. Lấy nội dung CV
         String cvAsText;
         if (cvFile != null && !cvFile.isEmpty()) {
-            // Trường hợp 1: User tải file lên
             cvAsText = fileService.extractTextFromBytes(cvFile.getBytes());
         } else {
-            // Trường hợp 2: Dùng online resume
             cvAsText = buildTextFromOnlineResume(currentUser);
         }
 
         if (cvAsText == null || cvAsText.trim().isEmpty()) {
-            throw new IOException("CV content is empty or could not be extracted.");
+            throw new IOException("CV content is empty.");
         }
 
-        // 3. Lấy danh sách công việc từ DB
-        // Lấy 100 job mới nhất đang active để AI tham khảo
-        Pageable pageable = PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Specification<Job> spec = (root, query, cb) -> cb.isTrue(root.get("active"));
-        List<Job> recentJobs = this.jobRepository.findAll(spec, pageable).getContent();
-
-        // Convert jobs to a simplified JSON string
+        // Lấy 50 job gần nhất để tiết kiệm token
+        Pageable pageable = PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<Job> recentJobs = this.jobRepository.findAll((root, query, cb) -> cb.isTrue(root.get("active")), pageable)
+                .getContent();
         String jobsJson = convertJobsToJson(recentJobs);
 
-        // 4. Xây dựng Prompt chi tiết cho Gemini
         String prompt = buildCvEvaluationPrompt(cvAsText, jobsJson, language);
 
-        // 5. Gọi API Gemini
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
+            // CẬP NHẬT Ở ĐÂY: Thêm FAST_JSON_CONFIG
+            GenerateContentResponse response = geminiClient.models.generateContent(
+                    GEMINI_MODEL,
+                    prompt,
+                    FAST_JSON_CONFIG);
 
-            List<Map<String, Object>> parts = new ArrayList<>();
-            parts.add(Map.of("text", prompt));
-
-            Map<String, Object> content = Map.of("parts", parts);
-            Map<String, Object> requestBody = Map.of("contents", Collections.singletonList(content));
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            String url = geminiApiUrl + "?key=" + geminiApiKey;
-            String response = restTemplate.postForObject(url, entity, String.class);
-
-            // 6. Parse kết quả và trả về
-            JsonNode root = objectMapper.readTree(response);
-            String textResponse = root.path("candidates").get(0).path("content").path("parts").get(0).path("text")
-                    .asText();
-            String cleanedJson = textResponse.replace("```json", "").replace("```", "").trim();
-
+            String cleanedJson = cleanJson(response.text());
             return objectMapper.readValue(cleanedJson, ResCvEvaluationDTO.class);
-
         } catch (Exception e) {
-            System.err.println("Error calling Gemini API for CV evaluation: " + e.getMessage());
-            // Có thể throw một exception tùy chỉnh ở đây
-            throw new IOException("Failed to get response from AI service.", e);
+            log.error("Error calling Gemini SDK (evaluateCv): {}", e.getMessage());
+            throw new IOException("Failed to analyze CV with AI.", e);
         }
     }
 
@@ -996,4 +859,5 @@ public class GeminiService {
         private long jobId;
         private int score;
     }
+
 }
