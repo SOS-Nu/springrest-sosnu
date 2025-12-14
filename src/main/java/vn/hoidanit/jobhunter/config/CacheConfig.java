@@ -1,12 +1,9 @@
 package vn.hoidanit.jobhunter.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-// *** THÊM CÁC IMPORT NÀY ***
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,10 +18,13 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+// *** THÊM CÁC IMPORT NÀY ***
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 @Configuration
 @EnableCaching
@@ -78,8 +78,9 @@ public class CacheConfig {
                                 .withInitialCacheConfigurations(cacheConfigurations)
                                 .initialCacheNames(Set.of("roles", "permissions", "jobMatches",
                                                 "user-security-timestamp", "user-permissions-v1",
-                                                "candidateSearchState")) // <<< Thêm tên cache mới nếu bạn dùng
-                                                                         // @Cacheable
+                                                "candidateSearchState", "allSkillNames")) // <<< Thêm tên cache mới nếu
+                                                                                          // bạn dùng
+                                // @Cacheable
                                 .build();
         }
 }

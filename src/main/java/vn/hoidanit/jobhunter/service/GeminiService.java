@@ -34,6 +34,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import vn.hoidanit.jobhunter.domain.entity.Job;
+import vn.hoidanit.jobhunter.domain.entity.Skill;
 import vn.hoidanit.jobhunter.domain.entity.User;
 import vn.hoidanit.jobhunter.domain.response.ResCandidateWithScoreDTO;
 import vn.hoidanit.jobhunter.domain.response.ResFindCandidatesDTO;
@@ -57,7 +58,7 @@ import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 public class GeminiService {
     private static final int CANDIDATE_CHUNK_SIZE = 50;
 
-    private static final int CHUNK_SIZE = 50;
+    private static final int CHUNK_SIZE = 300;
 
     private static final String GEMINI_MODEL = "gemini-2.0-flash";
 
@@ -77,6 +78,7 @@ public class GeminiService {
     private final JobService jobService;
     private final UserRepository userRepository;
     private final CacheManager cacheManager;
+    private final SkillService skillService;
     @Value("${gemini.api.key}")
     private String geminiApiKey;
 
@@ -85,7 +87,8 @@ public class GeminiService {
 
     public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService,
             ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService, CacheManager cacheManager,
-            UserRepository userRepository, Client geminiClient) {
+            UserRepository userRepository, Client geminiClient,
+            SkillService skillService) {
         this.restTemplate = restTemplate;
         this.userService = userService;
         this.fileService = fileService;
@@ -95,6 +98,7 @@ public class GeminiService {
         this.userRepository = userRepository;
         this.cacheManager = cacheManager;
         this.geminiClient = geminiClient;
+        this.skillService = skillService;
     }
     // ================= START: LOGIC TÌM KIẾM ỨNG VIÊN MỚI =================
 
@@ -514,13 +518,13 @@ public class GeminiService {
                 Map<Long, Job> jobMap = jobsToProcess.stream()
                         .collect(Collectors.toMap(Job::getId, Function.identity()));
 
-                // <<< FIX QUAN TRỌNG: BỎ ĐIỀU KIỆN IF SCORE >= 70 >>>
+                // : BỎ ĐIỀU KIỆN IF SCORE >= 70 >>>
                 // Thay vào đó, chấp nhận mọi kết quả AI trả về (thường là > 0)
                 // Việc sắp xếp cao xuống thấp đã được AI làm, hoặc Client sẽ sort.
                 for (GeminiJobScoreResponse rankedJob : rankedJobScores) {
                     Job jobDetail = jobMap.get(rankedJob.getJobId());
                     // Chỉ cần job tồn tại và điểm > 0 (hoặc ngưỡng thấp hơn như 40 để lọc rác)
-                    if (jobDetail != null && rankedJob.getScore() > 10) {
+                    if (jobDetail != null && rankedJob.getScore() > 30) {
                         ResFetchJobDTO jobDTO = jobService.convertToResFetchJobDTO(jobDetail);
                         state.getFoundJobs().add(new ResJobWithScoreDTO(rankedJob.getScore(), jobDTO));
                     }
@@ -530,7 +534,7 @@ public class GeminiService {
             // Cập nhật lại con trỏ vị trí đã xử lý
             state.setLastProcessedIndex(endIndex);
 
-            // <<< FIX THÊM: BREAK SỚM NẾU ĐÃ TÌM THẤY ÍT NHẤT 1 LƯỢNG KẾT QUẢ KHÁ >>>
+            // FIX THÊM: BREAK SỚM NẾU ĐÃ TÌM THẤY ÍT NHẤT 1 LƯỢNG KẾT QUẢ KHÁ >>>
             // Để tránh việc lặp quá nhiều nếu chunk đầu tiên trả về ít kết quả nhưng vẫn
             // chấp nhận được.
             // Ví dụ: Nếu đã tìm được > 20 jobs thì dù chưa đủ targetSize (nếu target lớn)
@@ -566,41 +570,50 @@ public class GeminiService {
             return "";
         }
 
-        // Log kiểm tra input xem có bị lỗi font từ Controller xuống không
-        System.out.println("LOG-DEBUG: Raw input for Gemini extraction: " + originalText);
+        // 1. Lấy danh sách Skill từ DB (đã được cache hoặc tối ưu)
+        // Lưu ý: Nếu danh sách quá dài (> 2000 từ), cần cân nhắc cắt bớt hoặc dùng giải
+        // pháp Vector Search.
+        // Nhưng với quy mô web tuyển dụng vừa phải, việc append string này vẫn ổn.
+        String dbSkills = skillService.getAllSkillNamesAsString();
 
-        // Prompt mới: "Expand" thay vì chỉ "Extract"
-        String prompt = "You are an expert technical recruiter and search engine optimizer. " +
-                "Your task is to generate a list of relevant keywords for a Full-Text Search engine based on the user input. "
+        System.out.println("LOG-DEBUG: Raw input: " + originalText);
+
+        // 2. Prompt Tối ưu hóa Context
+        String prompt = "You are an expert technical recruiter using a Full-Text Search Engine.\n" +
+                "Your goal: Expand the user's search query into a list of standardized and related keywords.\n\n" +
+
+                "--- SYSTEM CONTEXT (DATABASE SKILLS) ---\n" +
+                "The system currently tracks these skills: [" + dbSkills + "]\n" +
+                "----------------------------------------\n\n" +
+
+                "--- USER INPUT ---\n" +
+                "'" + originalText + "'\n\n" +
+
+                "--- RULES ---\n" +
+                "1. **PRIORITY**: If the User Input implies any skill listed in 'SYSTEM CONTEXT', you MUST include the exact name from that list.\n"
                 +
-                "\n\nRULES:" +
-                "\n1. Analyze the input text: '" + originalText + "'" +
-                "\n2. If the input is a Job Description or Resume (long text): Extract top 20 most important technical skills, job titles, and tools."
+                "   (e.g., if Input='Jav', and Context has 'Java', output 'Java').\n" +
+                "2. **EXPANSION**: Do NOT limit yourself to the Context. You MUST also generate synonyms, related frameworks, job titles, and English translations.\n"
                 +
-                "\n3. **CRITICAL**: If the input is SHORT (e.g., 'Kỹ sư AI', 'Java Dev', 'Marketing'): " +
-                "   You MUST EXPAND it by generating synonyms, related technical skills, and English translations. " +
-                "   (Example: Input 'Kỹ sư AI' -> Output: 'Artificial Intelligence Machine Learning Deep Learning Python NLP Data Scientist Computer Vision django Data Science,....')."
+                "   (e.g., Input='Lập trình viên web' -> Output: 'Web Developer Frontend Backend Fullstack HTML CSS JavaScript React...').\n"
                 +
-                "\n4. Remove stop words (and, or, the, at, ...). Output must be a single space-separated string." +
-                "\n5. Return ONLY a JSON object: {\"keywords\": \"keyword1 keyword2 ...\"}." +
-                "\n\nResponse:";
+                "3. **OUTPUT**: Remove stop words. Return a SINGLE string of space-separated keywords.\n" +
+                "4. **FORMAT**: Return JSON ONLY: {\"keywords\": \"keyword1 keyword2 ...\"}.";
 
         try {
-            // Dùng FAST_JSON_CONFIG để trả về nhanh
             GenerateContentResponse response = geminiClient.models.generateContent(
                     GEMINI_MODEL,
                     prompt,
-                    FAST_JSON_CONFIG);
+                    FAST_JSON_CONFIG); // Config trả về JSON Schema
 
             String cleanedJson = cleanJson(response.text());
             KeywordResponse res = objectMapper.readValue(cleanedJson, KeywordResponse.class);
 
-            log.info(">>> Gemini Expanded Keywords: {}", res.getKeywords());
+            log.info(">>> Gemini Keywords: {}", res.getKeywords());
             return res.getKeywords();
         } catch (Exception e) {
-            log.error("Error extracting keywords with AI: {}", e.getMessage());
-            // Fallback: Nếu AI lỗi, trả về nguyên gốc (đã chuẩn hóa)
-            return originalText;
+            log.error("Error Gemini extraction: {}", e.getMessage());
+            return originalText; // Fallback
         }
     }
 
@@ -639,36 +652,29 @@ public class GeminiService {
     /**
      * ĐÃ CẬP NHẬT: Gửi thông tin ứng viên dưới dạng text thay vì file
      */
-    private List<GeminiJobScoreResponse> rankJobsWithGemini(String skillsDescription, String cvText, List<Job> jobs) {
+    private List<GeminiJobScoreResponse> rankJobsWithGemini(String userQuery, String cvText, List<Job> jobs) {
         StringBuilder prompt = new StringBuilder();
-        // Thay đổi role để AI cởi mở hơn
-        prompt.append("You are a helpful career assistant. Match these jobs to the candidate.\n");
+        prompt.append("Act as a STRICT Job Filter. Match jobs to USER QUERY.\n\n");
 
-        boolean hasCvText = (cvText != null && !cvText.trim().isEmpty());
-        if (hasCvText) {
-            prompt.append("Candidate Resume:\n").append(cvText).append("\n");
-        }
-        if (skillsDescription != null && !skillsDescription.trim().isEmpty()) {
-            prompt.append("Skills Summary: ").append(skillsDescription).append("\n");
-        }
+        // Input Data
+        prompt.append("USER QUERY: '").append(userQuery).append("'\n");
 
         try {
-            // Lưu ý: Dùng hàm convertJobsToJson đã tối ưu (cắt description) ở câu trả lời
-            // trước
-            String jobsJson = convertJobsToJson(jobs);
-            prompt.append("\nJobs to evaluate (JSON):\n").append(jobsJson);
+            prompt.append("CANDIDATES (JSON): ").append(convertJobsToJson(jobs)).append("\n\n");
         } catch (Exception e) {
-            log.error("Error converting jobs to JSON", e);
             return Collections.emptyList();
         }
 
-        // <<< FIX PROMPT: Rõ ràng hơn về output >>>
-        prompt.append("\n\nAnalyze strict matching based on Skills and Job Title. ");
-        prompt.append("Score from 0 to 100. ");
-        prompt.append("Return a JSON array: [{\"jobId\": number, \"score\": number}]. ");
-        // Quan trọng: Yêu cầu trả về hết, không tự ý lọc
+        prompt.append("--- STRICT FILTERING RULES ---\n");
         prompt.append(
-                "Include ALL jobs provided in the input, unless completely irrelevant (score 0). Sort by score DESC.");
+                "1. SALARY: If user asks for specific salary X, accept ONLY range [X-15%, X+15%]. Outside = REJECT.\n");
+        prompt.append("2. LOCATION: Exact City match required (e.g. HCM != Hanoi). Different City = REJECT.\n");
+        prompt.append("3. RELEVANCE: Tech stack/Title must match intent. Irrelevant = REJECT.\n");
+
+        prompt.append("\n--- OUTPUT FORMAT ---\n");
+        prompt.append("Return a JSON Array of matching jobs ONLY: [{\"jobId\": 123, \"score\": 90}].\n");
+        prompt.append(
+                "IMPORTANT: If a job is REJECTED or Score < 50, DO NOT include it in the output array. Return an empty array [] if no jobs match.");
 
         return callGeminiAndParseList(prompt.toString(), GeminiJobScoreResponse.class);
     }
@@ -791,14 +797,26 @@ public class GeminiService {
 
     // Hàm helper để convert danh sách Job thành chuỗi JSON đơn giản
     private String convertJobsToJson(List<Job> jobs) {
+        // Sử dụng ObjectNode của Jackson hoặc Map gọn nhẹ
         List<Map<String, Object>> simplifiedJobs = jobs.stream().map(job -> {
             Map<String, Object> map = new HashMap<>();
-            map.put("jobId", job.getId());
-            map.put("jobTitle", job.getName());
-            map.put("companyName", job.getCompany() != null ? job.getCompany().getName() : "N/A");
-            map.put("requiredSkills", job.getSkills().stream().map(s -> s.getName()).collect(Collectors.toList()));
-            map.put("description", job.getDescription());
-            map.put("level", job.getLevel());
+            map.put("id", job.getId()); // Đổi key ngắn hơn
+            map.put("title", job.getName());
+            map.put("skills", job.getSkills().stream().map(Skill::getName).collect(Collectors.toList()));
+            // Chỉ lấy 500 ký tự đầu của description để tiết kiệm token, AI vẫn hiểu được
+            // ngữ cảnh
+            String desc = job.getDescription() != null ? job.getDescription() : "";
+            map.put("desc", desc.length() > 500 ? desc.substring(0, 500) + "..." : desc);
+            map.put("loc", job.getLocation()); // location
+            map.put("salary", String.format("%.0f", job.getSalary()));
+            map.put("lvl", job.getLevel()); // level
+
+            if (job.getCompany() != null) {
+                map.put("comp", job.getCompany().getName());
+                map.put("field", job.getCompany().getField()); // Outsourcing/Product
+                map.put("scale", job.getCompany().getScale());
+                map.put("country", job.getCompany().getCountry());
+            }
             return map;
         }).collect(Collectors.toList());
 

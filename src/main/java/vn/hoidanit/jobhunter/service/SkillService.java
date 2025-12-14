@@ -3,7 +3,10 @@ package vn.hoidanit.jobhunter.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -35,11 +38,13 @@ public class SkillService {
         return null;
     }
 
+    @CacheEvict(value = "allSkillNames", allEntries = true)
     public Skill createSkill(Skill s) {
         return this.skillRepository.save(s);
     }
 
     @Transactional
+    @CacheEvict(value = "allSkillNames", allEntries = true)
     public ResBulkCreateSkillDTO handleBulkCreateSkills(List<SkillBulkCreateDTO> skillDTOs) {
         int total = skillDTOs.size();
         int success = 0;
@@ -67,10 +72,12 @@ public class SkillService {
         return new ResBulkCreateSkillDTO(total, success, total - success, failedSkills);
     }
 
+    @CacheEvict(value = "allSkillNames", allEntries = true)
     public Skill updateSkill(Skill s) {
         return this.skillRepository.save(s);
     }
 
+    @CacheEvict(value = "allSkillNames", allEntries = true)
     public void deleteSkill(long id) {
         // delete job (inside job_skill table)
         Optional<Skill> skillOptional = this.skillRepository.findById(id);
@@ -101,5 +108,20 @@ public class SkillService {
         rs.setResult(pageUser.getContent());
 
         return rs;
+    }
+
+    @Cacheable(value = "allSkillNames", key = "'global_skill_list'")
+    public String getAllSkillNamesAsString() {
+        // Chỉ select field name để tối ưu hiệu năng DB
+        List<Skill> skills = this.skillRepository.findAll();
+
+        if (skills.isEmpty()) {
+            return "";
+        }
+
+        // Nối chuỗi: "Java, React, Spring Boot, MySQL..."
+        return skills.stream()
+                .map(Skill::getName)
+                .collect(Collectors.joining(", "));
     }
 }
