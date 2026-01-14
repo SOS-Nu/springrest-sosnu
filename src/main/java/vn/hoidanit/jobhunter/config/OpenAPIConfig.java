@@ -1,8 +1,10 @@
 package vn.hoidanit.jobhunter.config;
 
 import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
@@ -31,9 +33,9 @@ public class OpenAPIConfig {
 
     private Contact createContact() {
         return new Contact()
-                .email("ads.hoidanit@gmail.com")
-                .name("Hỏi Dân IT")
-                .url("https://hoidanit.vn");
+                .email("levannguyen260901@gmail.com")
+                .name("Lê Văn Nguyên")
+                .url("https://levannguyen.pro");
     }
 
     private License createLicense() {
@@ -48,7 +50,7 @@ public class OpenAPIConfig {
                 .version("1.0")
                 .contact(createContact())
                 .description("This API exposes all endpoints (job hunter)")
-                .termsOfService("https://hoidanit.vn/donate")
+                .termsOfService("https://levannguyen.pro/project")
                 .license(createLicense());
     }
 
@@ -58,7 +60,7 @@ public class OpenAPIConfig {
                 .info(createApiInfo())
                 .servers(List.of(
                         createServer("http://localhost:8080", "Server URL in Development environment"),
-                        createServer("https://hoidanit.vn", "Server URL in Production environment")))
+                        createServer("https://levannguyen.pro", "Server URL in Production environment")))
                 .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
                 .components(new Components().addSecuritySchemes("Bearer Authentication", createAPIKeyScheme()));
     }
