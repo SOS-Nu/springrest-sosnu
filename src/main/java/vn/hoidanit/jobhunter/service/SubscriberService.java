@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import vn.hoidanit.jobhunter.domain.entity.Job;
@@ -14,8 +13,6 @@ import vn.hoidanit.jobhunter.domain.response.email.ResEmailJob;
 import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.SkillRepository;
 import vn.hoidanit.jobhunter.repository.SubscriberRepository;
-import vn.hoidanit.jobhunter.kafka.MailCommand;
-import vn.hoidanit.jobhunter.kafka.MailProducer;
 
 @Service
 public class SubscriberService {
@@ -24,18 +21,16 @@ public class SubscriberService {
     private final SkillRepository skillRepository;
     private final JobRepository jobRepository;
     private final EmailService emailService;
-    private final MailProducer mailProducer;
 
     public SubscriberService(
             SubscriberRepository subscriberRepository,
             SkillRepository skillRepository,
             JobRepository jobRepository,
-            EmailService emailService, MailProducer mailProducer) {
+            EmailService emailService) {
         this.subscriberRepository = subscriberRepository;
         this.skillRepository = skillRepository;
         this.jobRepository = jobRepository;
         this.emailService = emailService;
-        this.mailProducer = mailProducer;
     }
 
     // @Scheduled(cron = "*/10 * * * * *")
@@ -93,36 +88,60 @@ public class SubscriberService {
         return res;
     }
 
+    // public void sendSubscribersEmailJobs() {
+    // List<Subscriber> listSubs = this.subscriberRepository.findAll();
+    // if (listSubs == null || listSubs.isEmpty())
+    // return;
+    //
+    // for (Subscriber sub : listSubs) {
+    // List<Skill> listSkills = sub.getSkills();
+    // if (listSkills == null || listSkills.isEmpty())
+    // continue;
+    //
+    // List<Job> listJobs = this.jobRepository.findBySkillsIn(listSkills);
+    // if (listJobs == null || listJobs.isEmpty())
+    // continue;
+    //
+    // // Lấy jobId thay vì ResEmailJob chi tiết
+    // List<Long> jobIds = listJobs.stream().map(Job::getId).toList();
+    //
+    // // (khuyến nghị) cắt bớt nếu quá nhiều, ví dụ tối đa 50 job/lần gửi
+    // int limit = Math.min(jobIds.size(), 50);
+    // List<Long> jobIdsLimited = jobIds.subList(0, limit);
+    //
+    // MailCommand cmd = new MailCommand(
+    // sub.getEmail(),
+    // "Cơ hội việc làm hot đang chờ đón bạn, khám phá ngay",
+    // "job",
+    // sub.getName(),
+    // jobIdsLimited);
+    //
+    // // enqueue qua producer
+    // mailProducer.queue(cmd);
+    // }
+    // }
+
     public void sendSubscribersEmailJobs() {
         List<Subscriber> listSubs = this.subscriberRepository.findAll();
-        if (listSubs == null || listSubs.isEmpty())
-            return;
+        if (listSubs != null && listSubs.size() > 0) {
+            for (Subscriber sub : listSubs) {
+                List<Skill> listSkills = sub.getSkills();
+                if (listSkills != null && listSkills.size() > 0) {
+                    List<Job> listJobs = this.jobRepository.findBySkillsIn(listSkills);
+                    if (listJobs != null && listJobs.size() > 0) {
 
-        for (Subscriber sub : listSubs) {
-            List<Skill> listSkills = sub.getSkills();
-            if (listSkills == null || listSkills.isEmpty())
-                continue;
+                        List<ResEmailJob> arr = listJobs.stream().map(
+                                job -> this.convertJobToSendEmail(job)).collect(Collectors.toList());
 
-            List<Job> listJobs = this.jobRepository.findBySkillsIn(listSkills);
-            if (listJobs == null || listJobs.isEmpty())
-                continue;
-
-            // Lấy jobId thay vì ResEmailJob chi tiết
-            List<Long> jobIds = listJobs.stream().map(Job::getId).toList();
-
-            // (khuyến nghị) cắt bớt nếu quá nhiều, ví dụ tối đa 50 job/lần gửi
-            int limit = Math.min(jobIds.size(), 50);
-            List<Long> jobIdsLimited = jobIds.subList(0, limit);
-
-            MailCommand cmd = new MailCommand(
-                    sub.getEmail(),
-                    "Cơ hội việc làm hot đang chờ đón bạn, khám phá ngay",
-                    "job",
-                    sub.getName(),
-                    jobIdsLimited);
-
-            // enqueue qua producer
-            mailProducer.queue(cmd);
+                        this.emailService.sendEmailFromTemplateSync(
+                                sub.getEmail(),
+                                "Cơ hội việc làm hot đang chờ đón bạn, khám phá ngay",
+                                "job",
+                                sub.getName(),
+                                arr);
+                    }
+                }
+            }
         }
     }
 

@@ -59,8 +59,8 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
 
 	//kafka
-    implementation("org.springframework.kafka:spring-kafka")
-    testImplementation("org.springframework.kafka:spring-kafka-test")
+    // implementation("org.springframework.kafka:spring-kafka")
+    // testImplementation("org.springframework.kafka:spring-kafka-test")
 
 	//monitoring performence
 	implementation("io.micrometer:micrometer-registry-prometheus")
