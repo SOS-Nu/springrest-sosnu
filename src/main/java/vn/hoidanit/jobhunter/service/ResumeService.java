@@ -109,9 +109,10 @@ public class ResumeService {
         // >>> KẾT THÚC LOGIC MỚI <<<
 
         // Kiểm tra lượt submit CV
-        if (!userService.canSubmitCv(email)) {
-            throw new IdInvalidException("Bạn đã hết lượt nộp CV trong tháng này. Hãy nâng cấp lên VIP để nộp thêm!");
-        }
+        // if (!userService.canSubmitCv(email)) {
+        // throw new IdInvalidException("Bạn đã hết lượt nộp CV trong tháng này. Hãy
+        // nâng cấp lên VIP để nộp thêm!");
+        // }
 
         // Gán lại User và Job đầy đủ cho đối tượng resume để đảm bảo tính toàn vẹn
         resume.setUser(currentUser);

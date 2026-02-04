@@ -1,7 +1,6 @@
 package vn.hoidanit.jobhunter.service;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +31,6 @@ import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.SkillRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
-import vn.hoidanit.jobhunter.util.constant.LevelEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
@@ -107,12 +105,13 @@ public class JobService {
         }
 
         // Kiểm tra trạng thái VIP
-        if (!user.isVip()
-                || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
-            user.setVip(false);
-            userRepository.save(user);
-            throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công việc");
-        }
+        // if (!user.isVip()
+        // || (user.getVipExpiryDate() != null &&
+        // user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
+        // user.setVip(false);
+        // userRepository.save(user);
+        // throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công việc");
+        // }
 
         // Kiểm tra công ty của người dùng
         Company company = user.getCompany();

@@ -1,6 +1,5 @@
 package vn.hoidanit.jobhunter.service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -12,8 +11,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.turkraft.springfilter.boot.Filter;
 
 import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.Role;
@@ -236,12 +233,13 @@ public class CompanyService {
             throw new IdInvalidException("Người dùng không tồn tại");
         }
 
-        if (!user.isVip()
-                || (user.getVipExpiryDate() != null && user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
-            user.setVip(false);
-            userRepository.save(user);
-            throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công ty");
-        }
+        // if (!user.isVip()
+        // || (user.getVipExpiryDate() != null &&
+        // user.getVipExpiryDate().isBefore(LocalDateTime.now()))) {
+        // user.setVip(false);
+        // userRepository.save(user);
+        // throw new IdInvalidException("Bạn cần là tài khoản VIP để tạo công ty");
+        // }
 
         if (user.getCompany() != null) {
             throw new IdInvalidException("Bạn đã tạo một công ty. Mỗi người dùng chỉ được tạo một công ty");
