@@ -17,22 +17,15 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
-import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
-import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
-import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -75,23 +68,18 @@ public class SecurityConfiguration {
             "/swagger-ui.html",
             "/ws/**",
             "/auth/send-otp", "/auth/verify-otp-change-password",
-            "/api/v1/payment/vnpay/**",
             "/api/v1/jobs/by-company/**",
             "/api/v1/comments/**",
             "/api/v1/jobs/by-company/**",
             "/api/v1/skills/**",
             "/api/v1/users/detail/**",
-            "/api/v1/gemini/**",
             "/api/v1/users/is-public",
             "/api/v1/dashboard",
             "/api/v1/files/**",
             "/api/v1/auth/send-otp",
             "/api/v1/auth/verify-otp-change-password",
             "/api/v1/users/update-own-info",
-            "/api/v1/gemini/evaluate-cv/**",
             "/api/v1/notify-user/**",
-            "/api/v1/gemini/search-results/**",
-            "/api/v1/gemini/initiate-search/**",
 
     };
 

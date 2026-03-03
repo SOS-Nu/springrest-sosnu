@@ -1,5 +1,22 @@
 package vn.hoidanit.jobhunter.controller;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.List;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,24 +37,6 @@ import vn.hoidanit.jobhunter.service.UserService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 import vn.hoidanit.jobhunter.util.error.StorageException;
-
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.List;
-
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.GetMapping;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -147,14 +146,6 @@ public class UserController {
         return ResponseEntity.ok(userDetail);
     }
 
-    /**
-     * ENDPOINT MỚI: Lấy danh sách chi tiết người dùng với phân trang.
-     * 
-     * @param pageable Spring sẽ tự động tạo đối tượng này từ các tham số ?page= &
-     *                 ?size=
-     * @return ResponseEntity chứa đối tượng phân trang với danh sách chi tiết người
-     *         dùng
-     */
     @GetMapping("/users/detail")
     @ApiMessage("Lấy danh sách chi tiết người dùng với phân trang và bộ lọc")
     public ResponseEntity<ResultPaginationDTO> getAllUserDetails(

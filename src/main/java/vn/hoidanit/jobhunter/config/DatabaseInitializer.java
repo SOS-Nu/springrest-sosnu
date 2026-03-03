@@ -162,24 +162,8 @@ public class DatabaseInitializer implements CommandLineRunner {
             arr.add(new Permission("Get a subscriber by id", "/api/v1/subscribers/{id}", "GET", "SUBSCRIBERS"));
             arr.add(new Permission("Get subscribers with pagination", "/api/v1/subscribers", "GET", "SUBSCRIBERS"));
 
-            // payment
-            arr.add(new Permission("Update Success Payment", "/api/v1/payment/allhistory", "PUT", "PAYMENT"));
-            arr.add(new Permission("Export excel Payment", "/api/v1/payment/export/excel", "GET", "PAYMENT"));
-            arr.add(new Permission("export word month Payment", "/api/v1/payment/export/monthly-report", "GET",
-                    "PAYMENT"));
-            arr.add(new Permission("export word year Payment", "/api/v1/payment/export/yearly-report", "GET",
-                    "PAYMENT"));
-
-            arr.add(new Permission("Get payment by id", "/api/v1/payment/allhistory/{id}", "GET", "PAYMENT"));
-            arr.add(new Permission("Get payment with pagination", "/api/v1/payment/allhistory", "GET", "PAYMENT"));
-
             arr.add(new Permission("Download a file", "/api/v1/files", "POST", "FILES"));
             arr.add(new Permission("Upload a file", "/api/v1/files", "GET", "FILES"));
-
-            arr.add(new Permission("get candidate users for recruiter", "/api/v1/gemini/initiate-candidate-search",
-                    "POST", "SearchUsersAI"));
-            arr.add(new Permission("get candidate users for recruiter pagination",
-                    "/api/v1/gemini/candidate-search-results", "GET", "SearchUsersAI"));
 
             this.permissionRepository.saveAll(arr);
         }

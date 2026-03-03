@@ -15,7 +15,6 @@ import org.springframework.stereotype.Repository;
 
 import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.User;
-import vn.hoidanit.jobhunter.domain.entity.UserSession;
 import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
 
 @Repository
@@ -31,25 +30,6 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
         List<User> findAllByStatusAndIdNot(UserStatusEnum status, Long id);
 
         List<User> findByStatus(UserStatusEnum status);
-
-        /**
-         * Lọc sơ bộ ứng viên bằng FTS, tìm kiếm trên cả thông tin user và online
-         * resume.
-         * Chỉ trả về các user có isPublic = true.
-         */
-        // @Query(value = "SELECT u.* FROM users u " +
-        // "LEFT JOIN online_resumes o ON u.online_resume_id = o.id " +
-        // // THÊM ĐIỀU KIỆN is_vip = TRUE VÀ BỌC NGOẶC CHO MATCH
-        // "WHERE u.is_vip = TRUE AND (" +
-        // " MATCH(u.name, u.address) AGAINST(:keywords IN NATURAL LANGUAGE MODE) OR " +
-        // " MATCH(o.title, o.full_name, o.summary, o.certifications, o.educations,
-        // o.languages) AGAINST(:keywords IN NATURAL LANGUAGE MODE)"
-        // +
-        // ") " + // Đóng ngoặc ở đây
-        // "LIMIT :limit", nativeQuery = true)
-        // List<User> preFilterCandidatesByKeywords(
-        // @Param("keywords") String keywords,
-        // @Param("limit") int limit);
 
         @Query(value = "SELECT u.* FROM users u " +
                         "LEFT JOIN online_resumes o ON u.online_resume_id = o.id " +

@@ -41,7 +41,6 @@ import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
                 @NamedAttributeNode("onlineResume"),
                 // CHỈ GIỮ LẠI MỘT LIST
                 @NamedAttributeNode(value = "resumes", subgraph = "subgraph.resume.details")
-// LOẠI BỎ workExperiences VÀ paymentHistories KHỎI GRAPH NÀY
 }, subgraphs = {
                 @NamedSubgraph(name = "subgraph.resume.details", attributeNodes = {
                                 @NamedAttributeNode(value = "job", subgraph = "subgraph.job.company") }),

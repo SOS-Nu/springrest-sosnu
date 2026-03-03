@@ -153,7 +153,6 @@ public class UserService {
             user.setCompany(companyOptional.orElse(null));
         }
 
-        // role: DÙNG REPO LẤY ENTITY, KHÔNG GỌI roleService (vì trả DTO)
         if (user.getRole() != null && user.getRole().getId() > 0) {
             // nếu chỉ gán quan hệ, dùng reference để tránh query thừa
             Role roleRef = this.roleRepository.getReferenceById(user.getRole().getId());

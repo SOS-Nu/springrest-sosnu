@@ -20,8 +20,6 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 "/api/v1/files",
                 "/api/v1/resumes/**",
                 "/api/v1/subscribers/**",
-                "/api/v1/payment/vnpay/**",
-                "/api/v1/payment/history/**",
                 // chatting
                 "/chat",
                 "/api/v1/messages/**",
@@ -41,12 +39,9 @@ public class PermissionInterceptorConfiguration implements WebMvcConfigurer {
                 "/api/v1/auth/send-otp",
                 "/api/v1/auth/verify-otp-change-password",
                 "/api/v1/users/update-own-info",
-                "/api/v1/gemini/evaluate-cv/**",
-                "/api/v1/gemini/search-results/**",
-                "/api/v1/gemini/initiate-search/**",
+
                 "/actuator/health", "/actuator/prometheus",
                 "/error",
-                "/api/v1/payment/export/**"
 
         };
         registry.addInterceptor(getPermissionInterceptor())
