@@ -1,6 +1,7 @@
 package vn.hoidanit.jobhunter.domain.response.email;
 
 import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -10,6 +11,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class ResEmailJob {
+    // private long id;
     private String name;
     private double salary;
     private CompanyEmail company;

@@ -1,21 +1,18 @@
 package vn.hoidanit.jobhunter.service;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailSender;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.repository.JobRepository;
 
 @Service
@@ -35,6 +32,9 @@ public class EmailService {
         this.templateEngine = templateEngine;
         this.jobRepository = jobRepository;
     }
+    //
+    // @Value("${frontend-url}")
+    // private String frontendUrl;
 
     public void sendSimpleEmail() {
         SimpleMailMessage msg = new SimpleMailMessage();
@@ -68,6 +68,7 @@ public class EmailService {
         Context context = new Context();
         context.setVariable("name", username);
         context.setVariable("jobs", value);
+        // context.setVariable("baseUrl", frontendUrl);
 
         String content = templateEngine.process(templateName, context);
         this.sendEmailSync(to, subject, content, false, true);

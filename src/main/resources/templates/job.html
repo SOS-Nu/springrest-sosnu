@@ -2,82 +2,159 @@
 <html xmlns:th="http://www.thymeleaf.org">
 
 <head>
-    <title>Hỏi Dân IT vs Eric</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Opportunities for You</title>
+    <style>
+        /* Fallback cho các email client không hỗ trợ web fonts */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .header {
+            padding: 30px 40px;
+            background: linear-gradient(to right, #ec4899, #8b5cf6);
+            color: #ffffff;
+            text-align: center;
+        }
+
+        .content {
+            padding: 30px 40px;
+        }
+
+        .job-card {
+            border-bottom: 1px solid #f1f5f9;
+            padding: 20px 0;
+        }
+
+        .job-title {
+            color: #1e293b;
+            font-size: 18px;
+            font-weight: 700;
+            text-decoration: none;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .company-name {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .salary {
+            color: #ec4899;
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 12px;
+        }
+
+        .skill-badge {
+            display: inline-block;
+            background-color: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+
+        .btn-cta {
+            display: block;
+            text-align: center;
+            background: #8b5cf6;
+            /* Fallback */
+            background: linear-gradient(to right, #ec4899, #8b5cf6);
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-weight: 700;
+            margin-top: 30px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .footer {
+            padding: 20px 40px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 13px;
+            background-color: #f8fafc;
+        }
+
+        @media only screen and (max-width: 600px) {
+
+            .content,
+            .header {
+                padding: 20px !important;
+            }
+        }
+    </style>
 </head>
 
-
-<body
-    style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';">
-    <table style="max-width: 80rem; min-height: 100vh; padding: 2rem; margin: 0 auto; background-color: #f5f5f5;">
+<body>
+    <table width="100%" cellspacing="0" cellpadding="0" border="0">
         <tr>
-            <td align="center">
-                <table style="background-color: white; border-radius: 5px; padding: 20px;">
-                    <tr>
-                        <td>
-                            <div style="text-align: left; font-size: 20px;">Hỏi Dân IT</div>
-                        </td>
-                        <td>
-                            <div style="text-align: right; font-size: 20px;">Ít nhưng mà chất</div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2" style="margin: 15px 0; border-top: 1px solid rgba(5, 5, 5, 0.06);"></td>
-                    </tr>
-                    <tr>
-                        <td colspan="2">
-                            <div style="text-align: left;">
-                                <div style="font-size: 16px;">Hi <span th:text="${name}"></span>,</div>
-                                <div style="font-size: 16px;">One of these jobs may be your next one. Find out today!
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2" style="margin: 15px 0; border-top: 1px dashed rgba(5, 5, 5, 0.06);"></td>
-                    </tr>
-                    <tr>
-                        <td colspan="2">
-                            <table>
-                                <tr th:each="job : ${jobs}">
-                                    <td>
-                                        <div style="font-size: 16px;">
-                                            <a href="https://hoidanit.vn/" target="_blank"
-                                                style="text-decoration: none;" th:text="${job.name}"></a>
-                                        </div>
-                                        <div style="font-size: 14px;" th:text="${job.company.name}"></div>
-                                        <div style="font-size: 14px;">
-                                            <span
-                                                th:text="${#numbers.formatDecimal(job.salary, 0, 'COMMA', 0, 'POINT')}">
-                                            </span>
-                                            đ
-                                        </div>
-                                        <div style="margin-top: 5px;">
-                                            <span
-                                                style="font-size: 14px; background: #e8e8e8; padding: 3px; margin-right: 5px;  border-radius: 3px;"
-                                                th:each="skill : ${job.skills}" th:text="${skill.name}"></span>
-                                        </div>
-                                        <div style="margin: 15px 0; border-top: 1px dashed rgba(5, 5, 5, 0.06);"></div>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2" style="text-align: center;">
-                            <a href="https://hoidanit.vn/" target="_blank"
-                                style="display: inline-block; width: 100%; height: 40px; line-height: 40px; cursor: pointer; border-radius: 5px; background-color: #ea1e30; color: white; border: none; outline: none; text-decoration: none; font-size: 16px;">
-                                Xem thêm job tại Hỏi Dân IT
+            <td align="center" style="padding: 20px 0;">
+                <div class="container">
+                    <div class="header">
+                        <h1 style="margin: 0; font-size: 24px;">SOS Nu <span
+                                style="font-weight: normal;">JobHunter</span></h1>
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Ít nhưng mà chất 👋🏻</p>
+                    </div>
+
+                    <div class="content">
+                        <div style="font-size: 16px; color: #334155; margin-bottom: 20px;">
+                            Xin chào <strong th:text="${name}">User</strong>,
+                            <br />
+                            Dựa trên hồ sơ của bạn, chúng tôi đã tìm thấy một số cơ hội nghề nghiệp hấp dẫn dành riêng
+                            cho bạn:
+                        </div>
+
+                        <div th:each="job : ${jobs}" class="job-card">
+                            <a th:href="|${baseUrl}/job?id=${job.id}|" class="job-title" th:text="${job.name}">
+                                Senior Java Developer
                             </a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2">
-                            <div style="padding-top: 20px; text-align: left; font-size: 16px;">Cheers,</div>
-                            <div style="text-align: left; font-size: 16px;">Eric.</div>
-                        </td>
-                    </tr>
-                </table>
+                            <div class="company-name" th:text="${job.company.name}">Công ty ABC Solutions</div>
+                            <div class="salary">
+                                <span
+                                    th:text="${#numbers.formatDecimal(job.salary, 0, 'COMMA', 0, 'POINT')}">30,000,000</span>
+                                VNĐ
+                            </div>
+                            <div>
+                                <span class="skill-badge" th:each="skill : ${job.skills}"
+                                    th:text="${skill.name}">Java</span>
+                            </div>
+                        </div>
+
+                        <a href="https://levannguyen.pro/" class="btn-cta">Khám phá tất cả việc làm</a>
+
+                        <div style="margin-top: 30px; font-size: 14px; color: #64748b;">
+                            Trân trọng,<br />
+                            <strong> SOS Nu</strong>
+                        </div>
+                    </div>
+
+                    <div class="footer">
+                        &copy; 2026 SOS Nu JobHunter. All rights reserved.<br />
+                        Ho Chi Minh City, Vietnam.
+                    </div>
+                </div>
             </td>
         </tr>
     </table>
