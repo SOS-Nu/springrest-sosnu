@@ -2,6 +2,7 @@ package vn.hoidanit.jobhunter.domain.response.job;
 
 import java.time.Instant;
 import java.util.List;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -23,6 +24,7 @@ public class ResFetchJobDTO {
     private String createdBy;
     private String updatedBy;
     private CompanyInfo company;
+    private boolean isApplied;
     private List<SkillInfo> skills;
 
     @Getter

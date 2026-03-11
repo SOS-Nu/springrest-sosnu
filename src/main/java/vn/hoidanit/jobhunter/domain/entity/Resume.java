@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -20,7 +21,9 @@ import vn.hoidanit.jobhunter.util.SecurityUtil;
 import vn.hoidanit.jobhunter.util.constant.ResumeStateEnum;
 
 @Entity
-@Table(name = "resumes")
+@Table(name = "resumes", indexes = {
+        @Index(name = "idx_resume_user_job", columnList = "user_id, job_id")
+})
 @Getter
 @Setter
 public class Resume {
@@ -36,6 +39,8 @@ public class Resume {
 
     @Enumerated(EnumType.STRING)
     private ResumeStateEnum status;
+
+    private String coverLetter;
 
     private Instant createdAt;
     private Instant updatedAt;

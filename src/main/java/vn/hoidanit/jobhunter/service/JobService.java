@@ -29,10 +29,10 @@ import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
 import vn.hoidanit.jobhunter.repository.CompanyRepository;
 import vn.hoidanit.jobhunter.repository.JobRepository;
+import vn.hoidanit.jobhunter.repository.ResumeRepository;
 import vn.hoidanit.jobhunter.repository.SkillRepository;
 import vn.hoidanit.jobhunter.repository.UserRepository;
 import vn.hoidanit.jobhunter.util.SecurityUtil;
-import vn.hoidanit.jobhunter.util.constant.LevelEnum;
 import vn.hoidanit.jobhunter.util.error.IdInvalidException;
 
 @Service
@@ -42,18 +42,38 @@ public class JobService {
     private final SkillRepository skillRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final ResumeRepository resumeRepository;
 
     public JobService(JobRepository jobRepository,
             SkillRepository skillRepository, CompanyRepository companyRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository, ResumeRepository resumeRepository) {
         this.jobRepository = jobRepository;
         this.skillRepository = skillRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
+        this.resumeRepository = resumeRepository;
     }
 
     public Optional<Job> fetchJobById(long id) {
         return this.jobRepository.findById(id);
+    }
+
+    public ResFetchJobDTO fetchJobDetail(long id) {
+        Job job = this.jobRepository.findById(id).orElse(null);
+        if (job == null)
+            return null;
+
+        ResFetchJobDTO dto = this.convertToResFetchJobDTO(job);
+
+        // Check trạng thái apply
+        Optional<String> currentUserEmail = SecurityUtil.getCurrentUserLogin();
+        if (currentUserEmail.isPresent()) {
+            User user = this.userRepository.findByEmail(currentUserEmail.get());
+            if (user != null) {
+                dto.setApplied(this.resumeRepository.existsByUser_IdAndJob_Id(user.getId(), id));
+            }
+        }
+        return dto;
     }
 
     public ResCreateJobDTO create(Job j) {
@@ -354,7 +374,7 @@ public class JobService {
         jobRepository.deleteById(id);
     }
 
-    // ========== CHANGE START: Modified fetchAll method ==========
+    // ========== ==========
     public ResultPaginationDTO fetchAll(Specification<Job> spec, Pageable pageable) {
         // Lấy thông tin người dùng hiện tại
         Optional<String> currentUserLogin = SecurityUtil.getCurrentUserLogin();
@@ -400,14 +420,25 @@ public class JobService {
         // Ta cần đảm bảo JobRepository có phương thức findByIdIn với EntityGraph
         List<Job> jobsWithDetails = this.jobRepository.findAllById(jobIds);
 
-        // BƯỚC 3: Map từ danh sách đã có đầy đủ details sang DTO
-        List<ResFetchJobDTO> listJobDTO = jobsWithDetails
-                .stream()
-                .map(this::convertToResFetchJobDTO)
-                .collect(Collectors.toList());
+        List<Long> appliedJobIds = new ArrayList<>();
+        Optional<String> currentUserEmail = SecurityUtil.getCurrentUserLogin();
+        if (currentUserEmail.isPresent()) {
+            User user = this.userRepository.findByEmail(currentUserEmail.get());
+            if (user != null) {
+                // Chỉ gọi DB 1 lần để lấy tất cả ID job đã apply
+                appliedJobIds = this.resumeRepository.findAllAppliedJobIdsByUserId(user.getId());
+            }
+        }
+
+        final List<Long> finalAppliedIds = appliedJobIds; // Dùng cho lambda
+        List<ResFetchJobDTO> listJobDTO = jobsWithDetails.stream().map(item -> {
+            ResFetchJobDTO dto = this.convertToResFetchJobDTO(item);
+            // Kiểm tra xem ID của job hiện tại có trong list đã apply không
+            dto.setApplied(finalAppliedIds.contains(item.getId()));
+            return dto;
+        }).collect(Collectors.toList());
 
         rs.setResult(listJobDTO);
-
         return rs;
     }
     // ========== CHANGE END ==========

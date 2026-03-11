@@ -2,6 +2,7 @@ package vn.hoidanit.jobhunter.controller;
 
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -14,7 +15,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
 import com.turkraft.springfilter.boot.Filter;
+
 import jakarta.validation.Valid;
 import vn.hoidanit.jobhunter.domain.entity.Job;
 import vn.hoidanit.jobhunter.domain.entity.JobBulkCreateDTO;
@@ -23,6 +26,7 @@ import vn.hoidanit.jobhunter.domain.request.ReqUpdateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResBulkCreateJobDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResCreateJobDTO;
+import vn.hoidanit.jobhunter.domain.response.job.ResFetchJobDTO;
 import vn.hoidanit.jobhunter.domain.response.job.ResUpdateJobDTO;
 import vn.hoidanit.jobhunter.service.JobService;
 import vn.hoidanit.jobhunter.util.annotation.ApiMessage;
@@ -79,13 +83,15 @@ public class JobController {
 
     @GetMapping("/jobs/{id}")
     @ApiMessage("Get a job by id")
-    public ResponseEntity<Job> getJob(@PathVariable("id") long id) throws IdInvalidException {
-        Optional<Job> currentJob = this.jobService.fetchJobById(id);
-        if (!currentJob.isPresent()) {
-            throw new IdInvalidException("Job not found");
+    public ResponseEntity<ResFetchJobDTO> getJob(@PathVariable("id") long id) throws IdInvalidException {
+        // Gọi hàm fetchJobDetail (hàm trả về DTO) thay vì fetchJobById (trả về Entity)
+        ResFetchJobDTO jobDto = this.jobService.fetchJobDetail(id);
+
+        if (jobDto == null) {
+            throw new IdInvalidException("Job với id = " + id + " không tồn tại");
         }
 
-        return ResponseEntity.ok().body(currentJob.get());
+        return ResponseEntity.ok().body(jobDto);
     }
 
     @GetMapping("/jobs")

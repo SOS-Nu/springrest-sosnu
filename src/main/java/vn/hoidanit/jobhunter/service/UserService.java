@@ -67,7 +67,6 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private CompanyService companyService;
-    private RoleService roleService;
     private final RoleRepository roleRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final FileService fileService;
@@ -78,18 +77,17 @@ public class UserService {
     private final UserSessionRepository userSessionRepository;
 
     // limit sessions user
-    private static final int MAX_SESSIONS_PER_USER = 10;
+    private static final int MAX_SESSIONS_PER_USER = 50;
 
     private static final Logger log = LoggerFactory.getLogger(TokenBlacklistFilter.class); // Thêm logger
 
     public UserService(UserRepository userRepository, CompanyService companyService,
-            RoleService roleService, PasswordEncoder passwordEncoder, RoleRepository roleRepository,
+            PasswordEncoder passwordEncoder, RoleRepository roleRepository,
             ChatRoomRepository chatRoomRepository, FileService fileService, OnlineResumeService onlineResumeService,
             ChatMessageRepository chatMessageRepository, CommentRepository commentRepository,
             RedisTokenBlacklistService blacklistService, UserSessionRepository userSessionRepository) {
         this.userRepository = userRepository;
         this.companyService = companyService;
-        this.roleService = roleService;
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
         this.chatRoomRepository = chatRoomRepository;

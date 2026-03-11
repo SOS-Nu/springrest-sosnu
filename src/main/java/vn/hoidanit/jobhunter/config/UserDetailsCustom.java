@@ -1,9 +1,7 @@
 package vn.hoidanit.jobhunter.config;
 
-import java.util.Collections;
 import java.util.HashSet; // Thêm
 import java.util.Set; // Thêm
-import java.util.stream.Collectors; // Thêm
 
 import org.springframework.security.core.GrantedAuthority; // Thêm
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -30,6 +28,12 @@ public class UserDetailsCustom implements UserDetailsService {
         vn.hoidanit.jobhunter.domain.entity.User user = this.userService
                 .findUserWithRoleAndPermissionsByEmail(username)
                 .orElseThrow(() -> new UsernameNotFoundException("UserName/Password không hợp lệ"));
+
+        if (user.getPassword() == null) {
+            // Tùy chọn: Ném lỗi đặc biệt để FE xử lý (yêu cầu đặt mật khẩu hoặc dùng Social
+            // Login)
+            throw new UsernameNotFoundException("Tài khoản chưa thiết lập mật khẩu. Vui lòng đăng nhập bằng Google.");
+        }
 
         // Lấy tất cả quyền (bao gồm tên Role và các Permission)
         Set<GrantedAuthority> authorities = new HashSet<>();

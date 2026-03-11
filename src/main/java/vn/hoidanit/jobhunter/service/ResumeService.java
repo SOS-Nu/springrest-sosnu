@@ -101,10 +101,13 @@ public class ResumeService {
         Job job = this.jobRepository.findById(resume.getJob().getId())
                 .orElseThrow(() -> new IdInvalidException("Job với id=" + resume.getJob().getId() + " không tồn tại"));
 
-        // >>> LOGIC MỚI: KIỂM TRA ĐÃ APPLY HAY CHƯA <<<
+        Optional<Resume> resResume = this.resumeRepository.findByUserIdAndJobId(currentUser.getId(),
+                job.getId());
+        // KIỂM TRA ĐÃ APPLY HAY CHƯA
         // Sử dụng phương thức mới trong repository để kiểm tra
-        if (this.resumeRepository.existsByUser_IdAndJob_Id(currentUser.getId(), job.getId())) {
-            throw new IdInvalidException("Bạn đã apply vào job này rồi");
+        if (resResume.isPresent() && resResume.get().getId() != 0) {
+            // throw new IdInvalidException("Bạn đã apply vào job này rồi");
+            this.delete(resResume.get().getId());
         }
         // >>> KẾT THÚC LOGIC MỚI <<<
 
@@ -140,6 +143,7 @@ public class ResumeService {
         }
 
         resume.setScore(score);
+        resume.setStatus(ResumeStateEnum.REVIEWING);
 
         // Lưu resume với điểm số vào DB
         Resume savedResume = this.resumeRepository.save(resume);
@@ -151,6 +155,7 @@ public class ResumeService {
         // Trả về DTO (giữ nguyên)
         ResCreateResumeDTO res = new ResCreateResumeDTO();
         res.setId(savedResume.getId());
+        res.setCoverLetter(savedResume.getCoverLetter());
         res.setCreatedBy(savedResume.getCreatedBy());
         res.setCreatedAt(savedResume.getCreatedAt());
 

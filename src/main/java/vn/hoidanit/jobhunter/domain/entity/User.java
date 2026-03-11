@@ -17,6 +17,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedAttributeNode;
@@ -41,14 +42,15 @@ import vn.hoidanit.jobhunter.util.constant.UserStatusEnum;
                 @NamedAttributeNode("onlineResume"),
                 // CHỈ GIỮ LẠI MỘT LIST
                 @NamedAttributeNode(value = "resumes", subgraph = "subgraph.resume.details")
-// LOẠI BỎ workExperiences VÀ paymentHistories KHỎI GRAPH NÀY
 }, subgraphs = {
                 @NamedSubgraph(name = "subgraph.resume.details", attributeNodes = {
                                 @NamedAttributeNode(value = "job", subgraph = "subgraph.job.company") }),
                 @NamedSubgraph(name = "subgraph.job.company", attributeNodes = { @NamedAttributeNode("company") })
 })
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+                @Index(name = "idx_user_email", columnList = "email", unique = true)
+})
 @Getter
 @Setter
 public class User {

@@ -15,6 +15,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -36,7 +37,11 @@ import vn.hoidanit.jobhunter.util.constant.LevelEnum;
         @NamedAttributeNode("skills")
 })
 @Entity
-@Table(name = "jobs")
+@Table(name = "jobs", indexes = {
+        @Index(name = "idx_job_company", columnList = "company_id"),
+        @Index(name = "idx_job_active", columnList = "active"),
+        @Index(name = "idx_job_company_active", columnList = "company_id, active")
+})
 @Getter
 @Setter
 public class Job {

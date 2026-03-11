@@ -9,6 +9,7 @@ import lombok.Setter;
 @Setter
 public class ResCreateResumeDTO {
     private long id;
+    private String coverLetter;
     private Instant createdAt;
     private String createdBy;
 }
