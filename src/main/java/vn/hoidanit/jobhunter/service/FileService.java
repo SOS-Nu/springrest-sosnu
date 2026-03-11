@@ -12,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.text.Normalizer;
+import java.util.regex.Pattern;
 
 import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
@@ -26,32 +28,41 @@ public class FileService {
     @Value("${hoidanit.upload-file.base-uri}")
     private String baseURI;
 
-    public void createDirectory(String folder) throws URISyntaxException {
-        URI uri = new URI(folder);
-        Path path = Paths.get(uri);
-        File tmpDir = new File(path.toString());
-        if (!tmpDir.isDirectory()) {
-            try {
-                Files.createDirectory(tmpDir.toPath());
-                System.out.println(">>> CREATE NEW DIRECTORY SUCCESSFUL, PATH = " + tmpDir.toPath());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } else {
-            System.out.println(">>> SKIP MAKING DIRECTORY, ALREADY EXISTS");
-        }
+    public void createDirectory(String folder) {
+        try {
+            // CÁCH FIX: Phải dùng URI.create để Java hiểu đây là một giao thức file
+            // Sau đó mới chuyển sang Path.
+            URI baseUri = URI.create(baseURI);
+            Path rootPath = Paths.get(baseUri);
 
+            // Dùng resolve để nối thêm folder (ví dụ: "resume")
+            Path targetPath = rootPath.resolve(folder);
+
+            if (!Files.exists(targetPath)) {
+                Files.createDirectories(targetPath);
+                System.out.println(">>> CREATE DIRECTORY SUCCESS: " + targetPath.toString());
+            }
+        } catch (Exception e) {
+            // In ra lỗi chi tiết để debug nếu có vấn đề về quyền ghi file
+            System.err.println(">>> ERROR CREATE DIRECTORY: " + e.getMessage());
+        }
     }
 
-    public String store(MultipartFile file, String folder) throws URISyntaxException, IOException {
-        // create unique filename
-        String finalName = System.currentTimeMillis() + "-" + file.getOriginalFilename();
+    public String store(MultipartFile file, String folder) throws IOException {
+        String cleanName = sanitizeFileName(file.getOriginalFilename());
+        String finalName = System.currentTimeMillis() + "-" + cleanName;
 
-        URI uri = new URI(baseURI + folder + "/" + finalName);
-        Path path = Paths.get(uri);
+        // Chuyển đổi baseURI "file:///..." sang Path vật lý
+        Path rootPath = Paths.get(URI.create(baseURI));
+
+        // Nối đường dẫn: root/folder/fileName
+        Path finalPath = rootPath.resolve(folder).resolve(finalName);
+
+        // Đảm bảo thư mục tồn tại
+        Files.createDirectories(finalPath.getParent());
+
         try (InputStream inputStream = file.getInputStream()) {
-            Files.copy(inputStream, path,
-                    StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(inputStream, finalPath, StandardCopyOption.REPLACE_EXISTING);
         }
         return finalName;
     }
@@ -69,11 +80,11 @@ public class FileService {
     }
 
     public InputStreamResource getResource(String fileName, String folder)
-            throws URISyntaxException, FileNotFoundException {
-        URI uri = new URI(baseURI + folder + "/" + fileName);
-        Path path = Paths.get(uri);
+            throws FileNotFoundException {
+        Path rootPath = Paths.get(URI.create(baseURI));
+        Path finalPath = rootPath.resolve(folder).resolve(fileName);
 
-        File file = new File(path.toString());
+        File file = new File(finalPath.toString());
         return new InputStreamResource(new FileInputStream(file));
     }
 
@@ -154,4 +165,25 @@ public class FileService {
         }
     };
 
+    public String sanitizeFileName(String fileName) {
+        if (fileName == null)
+            return "unknown_file";
+
+        // 1. Loại bỏ dấu tiếng Việt
+        String temp = Normalizer.normalize(fileName, Normalizer.Form.NFD);
+        Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+        temp = pattern.matcher(temp).replaceAll("");
+
+        // 2. Thay thế chữ đ/Đ
+        temp = temp.replace('đ', 'd').replace('Đ', 'D');
+
+        // 3. Thay thế khoảng trắng và ký tự đặc biệt bằng dấu gạch ngang
+        // Giữ lại dấu chấm để không làm hỏng extension
+        temp = temp.replaceAll("[^a-zA-Z0-9.-]", "-");
+
+        // 4. Loại bỏ các dấu gạch ngang liên tiếp (--- thành -)
+        temp = temp.replaceAll("-+", "-");
+
+        return temp;
+    }
 }

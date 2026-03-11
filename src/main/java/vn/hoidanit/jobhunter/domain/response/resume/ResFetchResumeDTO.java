@@ -1,6 +1,7 @@
 package vn.hoidanit.jobhunter.domain.response.resume;
 
 import java.time.Instant;
+
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
@@ -30,6 +31,8 @@ public class ResFetchResumeDTO {
     private JobResume job;
 
     private int score;
+    private String coverLetter;
+
     @Getter
     @Setter
     @AllArgsConstructor

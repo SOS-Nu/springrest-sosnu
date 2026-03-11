@@ -580,6 +580,7 @@ public class JobService {
             ResFetchJobDTO.CompanyInfo companyInfo = new ResFetchJobDTO.CompanyInfo();
             companyInfo.setId(job.getCompany().getId());
             companyInfo.setName(job.getCompany().getName());
+            companyInfo.setLogo(job.getCompany().getLogo());
             dto.setCompany(companyInfo);
         }
 

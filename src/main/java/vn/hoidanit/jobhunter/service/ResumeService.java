@@ -209,6 +209,7 @@ public class ResumeService {
         res.setCreatedBy(resume.getCreatedBy());
         res.setUpdatedAt(resume.getUpdatedAt());
         res.setUpdatedBy(resume.getUpdatedBy());
+        res.setCoverLetter(resume.getCoverLetter());
         res.setScore(resume.getScore());
 
         if (resume.getJob() != null) {

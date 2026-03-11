@@ -32,6 +32,7 @@ public class ResFetchJobDTO {
     public static class CompanyInfo {
         private long id;
         private String name;
+        private String Logo;
     }
 
     @Getter
