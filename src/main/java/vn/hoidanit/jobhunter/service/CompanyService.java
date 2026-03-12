@@ -13,8 +13,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.turkraft.springfilter.boot.Filter;
-
 import vn.hoidanit.jobhunter.domain.entity.Company;
 import vn.hoidanit.jobhunter.domain.entity.Role;
 import vn.hoidanit.jobhunter.domain.entity.User;
@@ -23,6 +21,8 @@ import vn.hoidanit.jobhunter.domain.request.ReqUpdateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResCreateCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResFetchCompanyDTO;
 import vn.hoidanit.jobhunter.domain.response.ResultPaginationDTO;
+import vn.hoidanit.jobhunter.domain.response.projection.CompanyRatingDTO;
+import vn.hoidanit.jobhunter.repository.CommentRepository;
 import vn.hoidanit.jobhunter.repository.CompanyRepository;
 import vn.hoidanit.jobhunter.repository.JobRepository;
 import vn.hoidanit.jobhunter.repository.RoleRepository;
@@ -36,15 +36,17 @@ public class CompanyService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final JobRepository jobRepository; // Inject JobRepository
+    private final JobRepository jobRepository;
+    private final CommentRepository commentRepository;
 
     public CompanyService(CompanyRepository companyRepository, UserRepository userRepository,
             RoleRepository roleRepository,
-            JobRepository jobRepository) {
+            JobRepository jobRepository, CommentRepository commentRepository) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.jobRepository = jobRepository;
+        this.commentRepository = commentRepository;
     }
 
     private ResFetchCompanyDTO convertToResFetchCompanyDTO(Company company) {
@@ -127,6 +129,11 @@ public class CompanyService {
         if (!companiesOnPage.isEmpty()) {
             List<Long> companyIds = companiesOnPage.stream().map(Company::getId).collect(Collectors.toList());
 
+            // QUERY MỚI: Lấy ratings
+            List<CompanyRatingDTO> ratingCounts = this.commentRepository.findAverageRatingsByCompanyIds(companyIds);
+            Map<Long, CompanyRatingDTO> ratingMap = ratingCounts.stream()
+                    .collect(Collectors.toMap(CompanyRatingDTO::getCompanyId, r -> r));
+
             // BƯỚC 2: Lấy user đại diện cho tất cả companies trên trang (Query #2 - Hiệu
             // quả)
             List<User> representativeUsers = this.userRepository.findFirstUserForCompanies(companyIds);
@@ -160,6 +167,16 @@ public class CompanyService {
                 dto.setUpdatedAt(company.getUpdatedAt());
                 dto.setCreatedBy(company.getCreatedBy());
                 dto.setUpdatedBy(company.getUpdatedBy());
+                CompanyRatingDTO ratingData = ratingMap.get(company.getId());
+                if (ratingData != null) {
+                    // Làm tròn 1 chữ số thập phân
+                    double avg = ratingData.getAverageRating() != null ? ratingData.getAverageRating() : 0.0;
+                    dto.setAverageRating(Math.round(avg * 10.0) / 10.0);
+                    dto.setTotalComments(ratingData.getTotalComments());
+                } else {
+                    dto.setAverageRating(0.0);
+                    dto.setTotalComments(0L);
+                }
 
                 // Map thông tin HR từ userMap
                 User hrUser = userMap.get(company.getId());
@@ -210,6 +227,12 @@ public class CompanyService {
         // Set totalJobs
         long activeJobs = this.jobRepository.countByCompany_IdAndActiveTrue(id);
         dto.setTotalJobs(activeJobs);
+
+        Double avgRating = this.commentRepository.findAverageRatingByCompanyId(id);
+        Long totalComments = this.commentRepository.countByCompanyId(id);
+
+        dto.setAverageRating(avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : 0.0);
+        dto.setTotalComments(totalComments != null ? totalComments : 0L);
 
         // Map thông tin HR trực tiếp tại đây
         User hrUser = company.getUsers().isEmpty() ? null : company.getUsers().get(0);

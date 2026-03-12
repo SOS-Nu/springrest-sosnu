@@ -33,6 +33,9 @@ public class ResFetchCompanyDTO {
 
     private HrCompany hrCompany;
 
+    private double averageRating;
+    private long totalComments;
+
     @Getter
     @Setter
     @AllArgsConstructor

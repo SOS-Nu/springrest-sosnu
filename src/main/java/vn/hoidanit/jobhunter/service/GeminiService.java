@@ -60,7 +60,7 @@ public class GeminiService {
 
     private static final int CHUNK_SIZE = 300;
 
-    private static final String GEMINI_MODEL = "gemini-2.0-flash";
+    private static final String GEMINI_MODEL = "gemini-2.5-flash";
 
     private static final GenerateContentConfig FAST_JSON_CONFIG = GenerateContentConfig.builder()
             .temperature(0.2f)
@@ -82,8 +82,8 @@ public class GeminiService {
     @Value("${gemini.api.key}")
     private String geminiApiKey;
 
-    @Value("${gemini.api.url}")
-    private String geminiApiUrl;
+    // @Value("${gemini.api.url}")
+    // private String geminiApiUrl;
 
     public GeminiService(RestTemplate restTemplate, UserService userService, FileService fileService,
             ObjectMapper objectMapper, JobRepository jobRepository, JobService jobService, CacheManager cacheManager,

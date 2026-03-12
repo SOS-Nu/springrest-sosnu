@@ -701,7 +701,7 @@ public class UserService {
             userRepository.save(user);
         }
 
-        int maxSubmissions = user.isVip() ? 10 : 5;
+        int maxSubmissions = user.isVip() ? 20 : 10;
         return user.getCvSubmissionCount() < maxSubmissions;
     }
 
